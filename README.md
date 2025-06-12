@@ -1,7 +1,7 @@
 # Ripify  
 ![Ripify](https://img.shields.io/badge/version-1.0-darkred) ![Release](https://img.shields.io/badge/Release-06%2F11%2F2025-blue)
 
-<img src="https://github.com/V0idpool/Ripify/blob/main/iconripify.png" alt="Ripify Logo" width="200" height="200"/>
+<center><img src="https://github.com/V0idpool/Ripify/blob/main/iconripify.png" alt="Ripify Logo" width="300" height="300"/></center>
 
 
 **Ripify** is a Windows app that helps you save music from Spotify playlists or albums by finding matching audio on YouTube and downloading MP3s using yt-dlp. It uses the Spotify API and YouTubeExplode under the hood to streamline the whole process of building your personal music collection.
