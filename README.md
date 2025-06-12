@@ -7,7 +7,6 @@
 **Ripify** is a Windows app that helps you save music from Spotify playlists or albums by finding matching audio on YouTube and downloading MP3s using yt-dlp. It uses the Spotify API and YouTubeExplode under the hood to streamline the whole process of building your personal music collection.
 
 ## ⚙️ Version: 1.0 (Initial Public Release)  
-## 👨‍💻 Created by: VoidBot Dev Team ([@VoidPool](https://github.com/V0idpool))  
 ## 📅 Released: 06/11/2025  
 
 ---
