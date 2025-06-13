@@ -1,5 +1,5 @@
 # Ripify  
-![Ripify](https://img.shields.io/badge/version-1.0-darkred) ![Release](https://img.shields.io/badge/Release-06%2F11%2F2025-blue)
+![Ripify](https://img.shields.io/badge/version-1.2-darkred) ![Release](https://img.shields.io/badge/Release-06%2F11%2F2025-blue)
 
 <p align="center">
   <img src="https://github.com/V0idpool/Ripify/blob/main/iconripify.png" alt="Ripify Logo" width="300" height="300">
@@ -7,8 +7,8 @@
 
 **Ripify** is a Windows app that helps you save music from Spotify playlists or albums by finding matching audio on YouTube and downloading MP3s using yt-dlp. It uses the Spotify API and YouTubeExplode under the hood to streamline the whole process of building your personal music collection.
 
-## ⚙️ Version: 1.0 (Initial Public Release)  
-## 📅 Released: 06/11/2025  
+## ⚙️ Version: 1.2
+## 📅 Originally Released: 06/11/2025  
 
 ---
 
@@ -16,7 +16,7 @@
 
 - **Pulls tracks from Spotify**: Just drop in a public playlist or album, and Ripify will grab the track info.
 - **Finds audio on YouTube**: It searches YouTube for each track and uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) to download high-quality MP3s.
-- **Batch downloading**: Grab multiple songs in one go, complete with progress updates.
+- **Batch downloading**: Grab multiple songs in one go, complete with progress updates and a max concurrent download of 3 (Can be increased).
 - **Pick your folder**: You can choose where your music gets saved.
 - **Preview before download**: See the list of songs it found before starting the download.
 - **Automatic yt-dlp setup**: No need to install yt-dlp yourself—Ripify handles that.
