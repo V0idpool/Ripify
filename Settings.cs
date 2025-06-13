@@ -7,7 +7,6 @@ namespace Ripify
 {
     public partial class Settings : Form
     {
-        private SpotifyClient spotify;
         private List<string> trackQueries = new();
 
         public Settings()

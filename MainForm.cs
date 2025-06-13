@@ -1,7 +1,10 @@
-using SpotifyAPI.Web;
+﻿using SpotifyAPI.Web;
 using System.Diagnostics;
 using YoutubeExplode;
 using System.Linq;
+using Ripify.Helpers;
+using static System.Net.Mime.MediaTypeNames;
+using Application = System.Windows.Forms.Application;
 namespace Ripify
 {
     public partial class MainForm : Form
@@ -82,14 +85,7 @@ namespace Ripify
         }
         private async Task DownloadAudioFromYoutube(string videoUrl, string outputFolder, int currentIndex, int totalCount)
         {
-            if (currentTaskLabel.InvokeRequired)
-            {
-                currentTaskLabel.Invoke(() => currentTaskLabel.Text = $"{currentIndex}/{totalCount}");
-            }
-            else
-            {
-                currentTaskLabel.Text = $"{currentIndex}/{totalCount}";
-            }
+           
             string ytDlpPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "yt-dlp.exe");
             string outputTemplate = Path.Combine(outputFolder, "%(title)s.%(ext)s");
 
@@ -132,13 +128,12 @@ namespace Ripify
 
                 if (type == "playlist")
                 {
-                    var playlist = await spotify.Playlists.Get(id);
-
-                    foreach (var item in playlist.Tracks.Items)
+                    var items = spotify.Paginate(await spotify.Playlists.GetItems(id));
+                    await foreach (var item in items)
                     {
                         if (item.Track is FullTrack track)
                         {
-                            string query = $"{track.Name} {track.Artists[0].Name}";
+                            string query = $"{track.Artists[0].Name} - {track.Name}";
                             trackQueries.Add(query);
                             trackList.Items.Add(query);
                         }
@@ -148,13 +143,23 @@ namespace Ripify
                 }
                 else if (type == "album")
                 {
-                    var album = await spotify.Albums.Get(id);
+                    int offset = 0;
+                    const int limit = 50;
+                    bool moreItems = true;
 
-                    foreach (var track in album.Tracks.Items)
+                    while (moreItems)
                     {
-                        string query = $"{track.Name} {track.Artists[0].Name}";
-                        trackQueries.Add(query);
-                        trackList.Items.Add(query);
+                        var page = await spotify.Albums.GetTracks(id, new AlbumTracksRequest { Limit = limit, Offset = offset });
+
+                        foreach (var track in page.Items)
+                        {
+                            string query = $"{track.Artists[0].Name} - {track.Name}";
+                            trackQueries.Add(query);
+                            trackList.Items.Add(query);
+                        }
+
+                        offset += limit;
+                        moreItems = page.Next != null;
                     }
 
                     MessageBox.Show($"Fetched {trackQueries.Count} tracks from album.");
@@ -176,6 +181,7 @@ namespace Ripify
 
         private async void downloadSelected_Click(object sender, EventArgs e)
         {
+            List<string> failedDownloads = new();
             if (trackList.SelectedItems.Count == 0)
             {
                 MessageBox.Show("Select at least one track to download.");
@@ -184,39 +190,127 @@ namespace Ripify
 
             if (folderBrowserDialog1.ShowDialog() != DialogResult.OK)
                 return;
+            if (etaMbLbl.InvokeRequired)
+            {
+                Invoke(() => etaMbLbl.Text = "0%");
+            }
+            else
+            {
+                etaMbLbl.Text = "0%";
+            }
+            if (currentTaskLabel.InvokeRequired)
+            {
+                Invoke(() => currentTaskLabel.Text = "0/0");
+            }
+            else
+            {
+                currentTaskLabel.Text = "0/0";
+            }
             downloadSelected.Enabled = false;
-            var saveFolder = folderBrowserDialog1.SelectedPath;
 
+            var saveFolder = folderBrowserDialog1.SelectedPath;
             var youtube = new YoutubeClient();
+            int maxConcurrency = 3; // Limit to 3 concurrent downloads TODO: experiment with values
+            var semaphore = new SemaphoreSlim(maxConcurrency);
 
             progressBar1.Maximum = trackList.SelectedItems.Count;
             progressBar1.Value = 0;
 
             int totalCount = trackList.SelectedItems.Count;
-            int currentIndex = 1;
-            foreach (string query in trackList.SelectedItems)
+            int completedCount = 0;
+            int startedCount = 0;
+            var downloadTasks = new List<Task>();
+
+            for (int i = 0; i < totalCount; i++)
             {
-                progressLbl.Text = $"Searching YouTube for {query}";
-                var searchResults = youtube.Search.GetVideosAsync(query);
+                int index = i;
+                string query = (string)trackList.SelectedItems[index];
 
-                var video = await searchResults.FirstOrDefaultAsync();
-                if (video == null)
+                await semaphore.WaitAsync();
+
+                var task = Task.Run(async () =>
                 {
-                    MessageBox.Show($"No YouTube video found for {query}");
-                    continue;
-                }
+                    try
+                    {
+                        int startedIndex = index + 1;
 
-                progressLbl.Text = $"Downloading {video.Title}";
-                await DownloadAudioFromYoutube(video.Url, saveFolder, currentIndex, totalCount);
-               
-                progressBar1.Value++;
-                int percent = (int)((progressBar1.Value / (double)progressBar1.Maximum) * 100);
-                etaMbLbl.Text = $"{percent}%";
-                currentIndex++;
+                        Invoke(() => currentTaskLabel.Text = $"{startedIndex}/{totalCount}");
+
+                        var searchResults = youtube.Search.GetVideosAsync(query);
+                        var video = await searchResults.FirstOrDefaultAsync();
+
+                        if (video == null)
+                        {
+                            lock (failedDownloads)
+                            {
+                                failedDownloads.Add($"{query} (No YouTube result)");
+                            }
+                            ExceptionHandler.LogDownload($"{query} (No YouTube result)");
+                            return;
+                        }
+
+                        Invoke(() => progressLbl.Text = $"Downloading {video.Title}");
+
+                        await DownloadAudioFromYoutube(video.Url, saveFolder, index + 1, totalCount);
+
+                        lock (failedDownloads)
+                        {
+                            completedCount++;
+                            Invoke(() =>
+                            {
+                                progressBar1.Value = completedCount;
+                                int percent = (int)((completedCount / (double)totalCount) * 100);
+                                etaMbLbl.Text = $"{percent}%";
+                            });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        lock (failedDownloads)
+                        {
+                            failedDownloads.Add($"{query} (Error: {ex.Message})");
+                        }
+                        ExceptionHandler.LogDownload($"{query} (Error: {ex.Message})");
+                    }
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                });
+
+                downloadTasks.Add(task);
             }
 
-            progressLbl.Text = "Download complete!";
-            MessageBox.Show("Selected downloads finished.");
+            await Task.WhenAll(downloadTasks);
+
+            Invoke(() =>
+            {
+                progressLbl.Text = "Download complete!";
+                currentTaskLabel.Text = $"{totalCount}/{totalCount}";
+            });
+
+           
+            if (failedDownloads.Count > 0)
+            {
+                string failedList = string.Join("\n", failedDownloads);
+                var result = MessageBox.Show($"Some tracks failed to download.\nWould you like to open the log file for more details?\n\n{failedDownloads.Count} tracks failed:\n\n{failedList}", "Download Completed with Errors", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (result == DialogResult.Yes)
+                {
+                    string logPath = Path.Combine(Application.StartupPath, "log_file.txt");
+                    if (File.Exists(logPath))
+                        Process.Start("notepad.exe", logPath);
+                }
+            }
+            else
+            {
+                var result = MessageBox.Show("All selected tracks downloaded successfully.\nWould you like to open the log file for more details?", "Download Completed", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                if (result == DialogResult.Yes)
+                {
+                    string logPath = Path.Combine(Application.StartupPath, "log_file.txt");
+                    if (File.Exists(logPath))
+                        Process.Start("notepad.exe", logPath);
+                }
+            }
             downloadSelected.Enabled = true;
         }
 

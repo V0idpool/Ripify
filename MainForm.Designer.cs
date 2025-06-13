@@ -56,6 +56,7 @@
             // 
             // fetchBTN
             // 
+            fetchBTN.BackColor = SystemColors.Control;
             fetchBTN.Font = new Font("Segoe UI", 9F, FontStyle.Bold, GraphicsUnit.Point, 0);
             fetchBTN.ForeColor = Color.Black;
             fetchBTN.Location = new Point(363, 38);
@@ -63,7 +64,7 @@
             fetchBTN.Size = new Size(106, 23);
             fetchBTN.TabIndex = 1;
             fetchBTN.Text = "Fetch Songs";
-            fetchBTN.UseVisualStyleBackColor = true;
+            fetchBTN.UseVisualStyleBackColor = false;
             fetchBTN.Click += fetchBTN_Click;
             // 
             // progressBar1
@@ -88,6 +89,8 @@
             // 
             // downloadSelected
             // 
+            downloadSelected.BackColor = SystemColors.Control;
+            downloadSelected.FlatStyle = FlatStyle.System;
             downloadSelected.Font = new Font("Segoe UI", 9F, FontStyle.Bold, GraphicsUnit.Point, 0);
             downloadSelected.ForeColor = Color.Black;
             downloadSelected.Location = new Point(12, 430);
@@ -95,7 +98,7 @@
             downloadSelected.Size = new Size(457, 31);
             downloadSelected.TabIndex = 4;
             downloadSelected.Text = "Download Selected...";
-            downloadSelected.UseVisualStyleBackColor = true;
+            downloadSelected.UseVisualStyleBackColor = false;
             downloadSelected.Click += downloadSelected_Click;
             // 
             // label1
@@ -168,9 +171,9 @@
             currentTaskLabel.ForeColor = Color.Red;
             currentTaskLabel.Location = new Point(74, 467);
             currentTaskLabel.Name = "currentTaskLabel";
-            currentTaskLabel.Size = new Size(29, 13);
+            currentTaskLabel.Size = new Size(23, 13);
             currentTaskLabel.TabIndex = 10;
-            currentTaskLabel.Text = "0 / 0";
+            currentTaskLabel.Text = "0/0";
             // 
             // etaMbLbl
             // 
