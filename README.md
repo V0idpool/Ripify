@@ -36,6 +36,9 @@ If you're building from source, open `Ripify.sln` in Visual Studio and build it 
 When you launch Ripify for the first time:
 - It’ll create a `UserCFG.ini` file if one doesn’t exist.
 - You’ll be asked to enter your Spotify `ClientID` and `ClientSecret`.
+- You will need to put a copy of your cookies file containing your logged in youtube account, this is to bypass age restriction or private content checks.
+- Use this in chrome browser with youtube.com open, and export the cookies to a text file.
+- Name the text file cookies.txt and place it in the same directory as Ripify.
 
 ---
 
