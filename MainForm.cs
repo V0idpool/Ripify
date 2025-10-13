@@ -5,6 +5,8 @@ using System.Linq;
 using Ripify.Helpers;
 using static System.Net.Mime.MediaTypeNames;
 using Application = System.Windows.Forms.Application;
+using System.Text;
+using AngleSharp.Text;
 namespace Ripify
 {
     public partial class MainForm : Form
@@ -13,6 +15,13 @@ namespace Ripify
         private List<string> trackQueries = new();
         private string clientID;
         private string clientSecret;
+        public int concurrentDownloads;
+        public string downloadsPath;
+        public string saveFolder;
+        private string exeFfmpeg = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg.exe");
+        string ffmpegFolder = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
+        private string exeFfprobe = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffprobe.exe");
+        private string cookiesPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cookies.txt");
         public MainForm()
         {
             InitializeComponent();
@@ -21,11 +30,20 @@ namespace Ripify
         private void MainForm_Load(object sender, EventArgs e)
         {
             string exePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "yt-dlp.exe");
-
             if (!File.Exists(exePath))
             {
                 string resourceName = "Ripify.Executables.yt-dlp.exe";
                 Ripify.Helpers.SaveFiles.SaveToDisk(resourceName, exePath);
+            }
+            if (!File.Exists(exeFfmpeg))
+            {
+                string resourceName = "Ripify.Executables.ffmpeg.exe";
+                Ripify.Helpers.SaveFiles.SaveToDisk(resourceName, exeFfmpeg);
+            }
+            if (!File.Exists(exeFfprobe))
+            {
+                string resourceName = "Ripify.Executables.ffprobe.exe";
+                Ripify.Helpers.SaveFiles.SaveToDisk(resourceName, exeFfprobe);
             }
             string userfile;
             userfile = @"\UserCFG.ini";
@@ -53,6 +71,27 @@ namespace Ripify
             else
             {
                 clientSecret = Helpers.IniHandler.UserSettings(Application.StartupPath + userfile, "ClientSecret");
+            }
+            if (string.IsNullOrEmpty(Helpers.IniHandler.UserSettings(Application.StartupPath + userfile, "DownloadPath")))
+            {
+                downloadsPath = "Input Download Path Here...";
+            }
+            else
+            {
+                downloadsPath = Helpers.IniHandler.UserSettings(Application.StartupPath + userfile, "DownloadPath");
+            }
+            if (string.IsNullOrEmpty(Helpers.IniHandler.UserSettings(Application.StartupPath + userfile, "MaxDownloads")))
+            {
+                concurrentDownloads = 3;
+            }
+            else
+            {
+                string maxDownloads = Helpers.IniHandler.UserSettings(Application.StartupPath + userfile, "MaxDownloads");
+
+                if (!int.TryParse(maxDownloads, out concurrentDownloads) || concurrentDownloads <= 0)
+                {
+                    concurrentDownloads = 3;
+                }
             }
         }
         private async Task InitializeSpotifyClient()
@@ -83,16 +122,16 @@ namespace Ripify
 
             return (null, null);
         }
-        private async Task DownloadAudioFromYoutube(string videoUrl, string outputFolder, int currentIndex, int totalCount)
+        private async Task<bool> DownloadAudioFromYoutube(string videoUrl, string outputFolder, int currentIndex, int totalCount)
         {
-           
+
             string ytDlpPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "yt-dlp.exe");
             string outputTemplate = Path.Combine(outputFolder, "%(title)s.%(ext)s");
 
             var psi = new ProcessStartInfo
             {
                 FileName = ytDlpPath,
-                Arguments = $"--extract-audio --audio-format mp3 -o \"{outputTemplate}\" \"{videoUrl}\"",
+                Arguments = $"--extract-audio --audio-format mp3 --restrict-filenames --cookies \"{cookiesPath}\" --ffmpeg-location \"{ffmpegFolder}\" -o \"{outputTemplate}\" \"{videoUrl}\"",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -101,13 +140,25 @@ namespace Ripify
 
             using var process = new Process { StartInfo = psi };
 
-            
+            StringBuilder stderr = new();
+            StringBuilder stdout = new();
+            var errorBuilder = new StringBuilder();
+            process.OutputDataReceived += (sender, e) => { if (e.Data != null) stdout.AppendLine(e.Data); };
+            process.ErrorDataReceived += (sender, e) => { if (e.Data != null) stderr.AppendLine(e.Data); };
+
 
             process.Start();
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
             await process.WaitForExitAsync();
+            // Check if process was successful
+            if (process.ExitCode != 0)
+            {
+                ExceptionHandler.LogDownload($"yt-dlp failed with exit code {process.ExitCode}: {stderr} | Output: {stdout}");
+                return false;
+            }
+            return true;
         }
         private async void fetchBTN_Click(object sender, EventArgs e)
         {
@@ -182,14 +233,45 @@ namespace Ripify
         private async void downloadSelected_Click(object sender, EventArgs e)
         {
             List<string> failedDownloads = new();
+            string userfile;
+            userfile = @"\UserCFG.ini";
             if (trackList.SelectedItems.Count == 0)
             {
                 MessageBox.Show("Select at least one track to download.");
                 return;
             }
-
-            if (folderBrowserDialog1.ShowDialog() != DialogResult.OK)
+            if (!File.Exists(cookiesPath))
+            {
+                var result = MessageBox.Show(
+                      "Missing cookies.txt file, this is required to download tracks from YouTube.\n\n" +
+                      "To fix this:\n" +
+                      "1. Install the 'Get cookies.txt LOCALLY' Chrome extension.\n" +
+                      "2. Use it to export your YouTube cookies.\n" +
+                      "3. Save the exported file as cookies.txt in the same folder as this app.\n\n" +
+                      "Would you like to open the Chrome extension page now?",
+                      "Missing cookies.txt",
+                      MessageBoxButtons.YesNo,
+                      MessageBoxIcon.Error
+                  );
+                if (result == DialogResult.Yes)
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc",
+                        UseShellExecute = true
+                    });
+                }
                 return;
+            }
+
+            saveFolder = IniHandler.UserSettings(Application.StartupPath + userfile, "DownloadPath");
+
+            if (string.IsNullOrWhiteSpace(saveFolder))
+            {
+                if (folderBrowserDialog1.ShowDialog() != DialogResult.OK)
+                    return;
+                saveFolder = folderBrowserDialog1.SelectedPath;
+            }
             if (etaMbLbl.InvokeRequired)
             {
                 Invoke(() => etaMbLbl.Text = "0%");
@@ -208,23 +290,22 @@ namespace Ripify
             }
             downloadSelected.Enabled = false;
 
-            var saveFolder = folderBrowserDialog1.SelectedPath;
             var youtube = new YoutubeClient();
-            int maxConcurrency = 3; // Limit to 3 concurrent downloads TODO: experiment with values
+            int maxConcurrency = concurrentDownloads; // Limit to 3 concurrent downloads TODO: experiment with values
             var semaphore = new SemaphoreSlim(maxConcurrency);
 
             progressBar1.Maximum = trackList.SelectedItems.Count;
             progressBar1.Value = 0;
 
-            int totalCount = trackList.SelectedItems.Count;
-            int completedCount = 0;
             int startedCount = 0;
             var downloadTasks = new List<Task>();
+            var selectedItems = trackList.SelectedItems.Cast<string>().ToList();
+            int totalCount = selectedItems.Count;
+            int completedCount = 0;
 
             for (int i = 0; i < totalCount; i++)
             {
-                int index = i;
-                string query = (string)trackList.SelectedItems[index];
+                string query = selectedItems[i];
 
                 await semaphore.WaitAsync();
 
@@ -232,26 +313,37 @@ namespace Ripify
                 {
                     try
                     {
-                        int startedIndex = index + 1;
+                        int startedIndex = i + 1;
 
                         Invoke(() => currentTaskLabel.Text = $"{startedIndex}/{totalCount}");
 
-                        var searchResults = youtube.Search.GetVideosAsync(query);
-                        var video = await searchResults.FirstOrDefaultAsync();
+                        var searchResults = youtube.Search.GetVideosAsync(query).Take(5);
+                        bool found = false;
+                        await foreach (var video in searchResults)
+                        {
+                            if (string.IsNullOrEmpty(video?.Url)) continue;
 
-                        if (video == null)
+                            Invoke(() => progressLbl.Text = $"Downloading: {video.Title}");
+
+                            bool success = await DownloadAudioFromYoutube(video.Url, saveFolder, i + 1, totalCount);
+                            if (success)
+                            {
+                                found = true;
+                                break;
+                            }
+                            else
+                            {
+                                ExceptionHandler.LogDownload($"Failed to download {video.Title}, trying next result...");
+                            }
+                        }
+
+                        if (!found)
                         {
                             lock (failedDownloads)
                             {
-                                failedDownloads.Add($"{query} (No YouTube result)");
+                                failedDownloads.Add($"{query} (No valid YouTube video found)");
                             }
-                            ExceptionHandler.LogDownload($"{query} (No YouTube result)");
-                            return;
                         }
-
-                        Invoke(() => progressLbl.Text = $"Downloading {video.Title}");
-
-                        await DownloadAudioFromYoutube(video.Url, saveFolder, index + 1, totalCount);
 
                         lock (failedDownloads)
                         {
@@ -289,16 +381,17 @@ namespace Ripify
                 currentTaskLabel.Text = $"{totalCount}/{totalCount}";
             });
 
-           
+
             if (failedDownloads.Count > 0)
             {
                 string failedList = string.Join("\n", failedDownloads);
-                var result = MessageBox.Show($"Some tracks failed to download.\nWould you like to open the log file for more details?\n\n{failedDownloads.Count} tracks failed:\n\n{failedList}", "Download Completed with Errors", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                var result = MessageBox.Show($"Some tracks failed to download.\nWould you like to open the log file for more details?\n\n{failedDownloads.Count} tracks failed!", "Download Completed with Errors", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
                 if (result == DialogResult.Yes)
                 {
                     string logPath = Path.Combine(Application.StartupPath, "log_file.txt");
                     if (File.Exists(logPath))
-                        Process.Start("notepad.exe", logPath);
+                        ExceptionHandler.LogInternalError($"{failedDownloads.Count} tracks failed:\n\n{failedList}");
+                    Process.Start("notepad.exe", logPath);
                 }
             }
             else
@@ -324,6 +417,19 @@ namespace Ripify
         {
             var about = new About();
             about.ShowDialog();
+        }
+
+        private void button1_Click(object sender, EventArgs e)
+        {
+            for (int i = 0; i < trackList.Items.Count; i++)
+            {
+                trackList.SetSelected(i, true);
+            }
+        }
+
+        private void cancelDownloads_Click(object sender, EventArgs e)
+        {
+
         }
     }
 }

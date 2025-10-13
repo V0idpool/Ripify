@@ -7,9 +7,13 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>iconripify.ico</ApplicationIcon>
+	<AssemblyVersion>1.2.0.0</AssemblyVersion>
+    <FileVersion>1.2.0.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Executables\ffmpeg.exe" />
+    <None Remove="Executables\ffprobe.exe" />
     <None Remove="Executables\yt-dlp.exe" />
     <None Remove="UserCFG.INI" />
   </ItemGroup>
@@ -19,6 +23,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Executables\ffmpeg.exe" />
+    <EmbeddedResource Include="Executables\ffprobe.exe" />
     <EmbeddedResource Include="Executables\yt-dlp.exe" />
     <EmbeddedResource Include="UserCFG.INI" />
   </ItemGroup>

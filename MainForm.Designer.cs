@@ -44,6 +44,8 @@
             aboutToolStripMenuItem = new ToolStripMenuItem();
             currentTaskLabel = new Label();
             etaMbLbl = new Label();
+            button1 = new Button();
+            cancelDownloads = new Button();
             menuStrip1.SuspendLayout();
             SuspendLayout();
             // 
@@ -81,10 +83,10 @@
             trackList.ForeColor = Color.FromArgb(192, 0, 0);
             trackList.FormattingEnabled = true;
             trackList.ItemHeight = 17;
-            trackList.Location = new Point(12, 75);
+            trackList.Location = new Point(12, 109);
             trackList.Name = "trackList";
             trackList.SelectionMode = SelectionMode.MultiExtended;
-            trackList.Size = new Size(457, 344);
+            trackList.Size = new Size(457, 310);
             trackList.TabIndex = 3;
             // 
             // downloadSelected
@@ -93,9 +95,9 @@
             downloadSelected.FlatStyle = FlatStyle.System;
             downloadSelected.Font = new Font("Segoe UI", 9F, FontStyle.Bold, GraphicsUnit.Point, 0);
             downloadSelected.ForeColor = Color.Black;
-            downloadSelected.Location = new Point(12, 430);
+            downloadSelected.Location = new Point(246, 425);
             downloadSelected.Name = "downloadSelected";
-            downloadSelected.Size = new Size(457, 31);
+            downloadSelected.Size = new Size(223, 31);
             downloadSelected.TabIndex = 4;
             downloadSelected.Text = "Download Selected...";
             downloadSelected.UseVisualStyleBackColor = false;
@@ -185,12 +187,41 @@
             etaMbLbl.Size = new Size(0, 13);
             etaMbLbl.TabIndex = 11;
             // 
+            // button1
+            // 
+            button1.BackColor = SystemColors.Control;
+            button1.Font = new Font("Segoe UI", 9F, FontStyle.Bold, GraphicsUnit.Point, 0);
+            button1.ForeColor = Color.Black;
+            button1.Location = new Point(384, 80);
+            button1.Name = "button1";
+            button1.Size = new Size(85, 23);
+            button1.TabIndex = 12;
+            button1.Text = "Select All...";
+            button1.UseVisualStyleBackColor = false;
+            button1.Click += button1_Click;
+            // 
+            // cancelDownloads
+            // 
+            cancelDownloads.BackColor = SystemColors.Control;
+            cancelDownloads.FlatStyle = FlatStyle.System;
+            cancelDownloads.Font = new Font("Segoe UI", 9F, FontStyle.Bold, GraphicsUnit.Point, 0);
+            cancelDownloads.ForeColor = Color.Black;
+            cancelDownloads.Location = new Point(12, 425);
+            cancelDownloads.Name = "cancelDownloads";
+            cancelDownloads.Size = new Size(223, 31);
+            cancelDownloads.TabIndex = 13;
+            cancelDownloads.Text = "Cancel";
+            cancelDownloads.UseVisualStyleBackColor = false;
+            cancelDownloads.Click += cancelDownloads_Click;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.Black;
             ClientSize = new Size(481, 531);
+            Controls.Add(cancelDownloads);
+            Controls.Add(button1);
             Controls.Add(etaMbLbl);
             Controls.Add(currentTaskLabel);
             Controls.Add(progressLbl);
@@ -233,5 +264,8 @@
         private ToolStripMenuItem aboutToolStripMenuItem;
         private Label currentTaskLabel;
         private Label etaMbLbl;
+        private TextBox textBox1;
+        private Button button1;
+        private Button cancelDownloads;
     }
 }
