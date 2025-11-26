@@ -122,6 +122,43 @@ namespace Ripify
 
             return (null, null);
         }
+        private bool TrackAlreadyExists(string artist, string title, string outputFolder)
+        {
+            string[] files = Directory.GetFiles(outputFolder, "*.mp3");
+
+            string normArtist = Normalize(artist);
+            string normTitle = Normalize(title);
+
+            foreach (var file in files)
+            {
+                string fileName = Path.GetFileNameWithoutExtension(file);
+                string normFile = Normalize(fileName);
+
+                // Match both artist + title inside the filename
+                if (normFile.Contains(normArtist) && normFile.Contains(normTitle))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private string Normalize(string input)
+        {
+            return input
+                .ToLower()
+                .Replace("_", " ")
+                .Replace("-", " ")
+                .Replace("(", " ")
+                .Replace(")", " ")
+                .Replace("[", " ")
+                .Replace("]", " ")
+                .Replace("official video", "")
+                .Replace("lyrics", "")
+                .Replace("audio", "")
+                .Replace("hd", "")
+                .Replace("hq", "")
+                .Trim();
+        }
         private async Task<bool> DownloadAudioFromYoutube(string videoUrl, string outputFolder, int currentIndex, int totalCount)
         {
 
@@ -316,7 +353,40 @@ namespace Ripify
                         int startedIndex = i + 1;
 
                         Invoke(() => currentTaskLabel.Text = $"{startedIndex}/{totalCount}");
+                        // Extract artist + title ONCE per query
+                        string artist = "";
+                        string title = "";
+                        int dashIdx = query.IndexOf("-");
 
+                        if (dashIdx > 0)
+                        {
+                            artist = query[..dashIdx].Trim();
+                            title = query[(dashIdx + 1)..].Trim();
+                        }
+                        else
+                        {
+                            title = query;
+                        }
+
+                        // Check BEFORE searching YouTube
+                        if (TrackAlreadyExists(artist, title, saveFolder))
+                        {
+                            Invoke(() => progressLbl.Text = $"Skipping existing: {title}");
+
+                            // Count as completed but DO NOT search/download
+                            lock (failedDownloads)
+                            {
+                                completedCount++;
+                            }
+
+                            Invoke(() =>
+                            {
+                                progressBar1.Value = completedCount;
+                                etaMbLbl.Text = $"{(int)((completedCount / (double)totalCount) * 100)}%";
+                            });
+
+                            return; // IMPORTANT → avoid double semaphore release & double progress
+                        }
                         var searchResults = youtube.Search.GetVideosAsync(query).Take(5);
                         bool found = false;
                         await foreach (var video in searchResults)

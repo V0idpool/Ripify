@@ -58,7 +58,7 @@
             // 
             label1.AutoSize = true;
             label1.Font = new Font("Segoe UI", 9.75F);
-            label1.ForeColor = Color.Red;
+            label1.ForeColor = Color.FromArgb(255, 128, 0);
             label1.Location = new Point(8, 35);
             label1.Name = "label1";
             label1.Size = new Size(59, 17);
@@ -69,7 +69,7 @@
             // 
             label2.AutoSize = true;
             label2.Font = new Font("Segoe UI", 9.75F);
-            label2.ForeColor = Color.Red;
+            label2.ForeColor = Color.FromArgb(255, 128, 0);
             label2.Location = new Point(8, 64);
             label2.Name = "label2";
             label2.Size = new Size(83, 17);
@@ -83,7 +83,7 @@
             groupBox1.Controls.Add(label2);
             groupBox1.Controls.Add(label1);
             groupBox1.Font = new Font("Segoe UI", 9.75F, FontStyle.Bold, GraphicsUnit.Point, 0);
-            groupBox1.ForeColor = Color.FromArgb(192, 0, 0);
+            groupBox1.ForeColor = Color.FromArgb(255, 128, 0);
             groupBox1.Location = new Point(12, 12);
             groupBox1.Name = "groupBox1";
             groupBox1.Size = new Size(457, 97);
@@ -119,7 +119,7 @@
             groupBox2.Controls.Add(label3);
             groupBox2.Controls.Add(label4);
             groupBox2.Font = new Font("Segoe UI", 9.75F, FontStyle.Bold, GraphicsUnit.Point, 0);
-            groupBox2.ForeColor = Color.FromArgb(192, 0, 0);
+            groupBox2.ForeColor = Color.FromArgb(255, 128, 0);
             groupBox2.Location = new Point(12, 115);
             groupBox2.Name = "groupBox2";
             groupBox2.Size = new Size(457, 114);
@@ -160,7 +160,7 @@
             // 
             label3.AutoSize = true;
             label3.Font = new Font("Segoe UI", 9.75F);
-            label3.ForeColor = Color.Red;
+            label3.ForeColor = Color.FromArgb(255, 128, 0);
             label3.Location = new Point(8, 67);
             label3.Name = "label3";
             label3.Size = new Size(141, 17);
@@ -171,7 +171,7 @@
             // 
             label4.AutoSize = true;
             label4.Font = new Font("Segoe UI", 9.75F);
-            label4.ForeColor = Color.Red;
+            label4.ForeColor = Color.FromArgb(255, 128, 0);
             label4.Location = new Point(8, 35);
             label4.Name = "label4";
             label4.Size = new Size(111, 17);

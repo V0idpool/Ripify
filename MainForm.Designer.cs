@@ -80,7 +80,7 @@
             // 
             trackList.BackColor = Color.Black;
             trackList.Font = new Font("Segoe UI", 9.75F, FontStyle.Bold, GraphicsUnit.Point, 0);
-            trackList.ForeColor = Color.FromArgb(192, 0, 0);
+            trackList.ForeColor = Color.White;
             trackList.FormattingEnabled = true;
             trackList.ItemHeight = 17;
             trackList.Location = new Point(12, 109);
@@ -107,7 +107,7 @@
             // 
             label1.AutoSize = true;
             label1.Font = new Font("Segoe UI", 9.75F);
-            label1.ForeColor = Color.Red;
+            label1.ForeColor = Color.White;
             label1.Location = new Point(12, 40);
             label1.Name = "label1";
             label1.Size = new Size(119, 17);
@@ -118,7 +118,7 @@
             // 
             label2.AutoSize = true;
             label2.Font = new Font("Segoe UI", 9.75F);
-            label2.ForeColor = Color.Red;
+            label2.ForeColor = Color.White;
             label2.Location = new Point(12, 464);
             label2.Name = "label2";
             label2.Size = new Size(63, 17);
@@ -129,7 +129,7 @@
             // 
             progressLbl.AutoSize = true;
             progressLbl.Font = new Font("Segoe UI", 8.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
-            progressLbl.ForeColor = Color.Red;
+            progressLbl.ForeColor = Color.White;
             progressLbl.Location = new Point(12, 511);
             progressLbl.Name = "progressLbl";
             progressLbl.Size = new Size(57, 13);
@@ -155,7 +155,7 @@
             // settingsToolStripMenuItem
             // 
             settingsToolStripMenuItem.Name = "settingsToolStripMenuItem";
-            settingsToolStripMenuItem.Size = new Size(125, 22);
+            settingsToolStripMenuItem.Size = new Size(180, 22);
             settingsToolStripMenuItem.Text = "Settings...";
             settingsToolStripMenuItem.Click += settingsToolStripMenuItem_Click;
             // 
@@ -170,7 +170,7 @@
             // 
             currentTaskLabel.AutoSize = true;
             currentTaskLabel.Font = new Font("Segoe UI", 8.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
-            currentTaskLabel.ForeColor = Color.Red;
+            currentTaskLabel.ForeColor = Color.White;
             currentTaskLabel.Location = new Point(74, 467);
             currentTaskLabel.Name = "currentTaskLabel";
             currentTaskLabel.Size = new Size(23, 13);
