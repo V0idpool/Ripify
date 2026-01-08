@@ -29,8 +29,9 @@
 ### 1. Download  
 Head over to the [Releases page](https://github.com/V0idpool/Ripify/releases/) and grab the latest version.
 
-### 2. Build (if needed)  
+### 2. Build from source (if needed, otherwise just download the Release)  
 If you're building from source, open `Ripify.sln` in Visual Studio and build it like any standard C# project.
+Ensure you download **FFmpeg Full Build (The latest version)** from https://www.gyan.dev/ffmpeg/builds/ and put ffmpeg.exe and ffprobe.exe in the "Executables" Folder.
 
 ### 3. First Time Running It  
 When you launch Ripify for the first time:
