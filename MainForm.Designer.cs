@@ -41,6 +41,10 @@
             menuStrip1 = new MenuStrip();
             fileToolStripMenuItem = new ToolStripMenuItem();
             settingsToolStripMenuItem = new ToolStripMenuItem();
+            logFileToolStripMenuItem = new ToolStripMenuItem();
+            openLogFileToolStripMenuItem = new ToolStripMenuItem();
+            openLogFileFolderToolStripMenuItem = new ToolStripMenuItem();
+            toolStripMenuItem2 = new ToolStripMenuItem();
             aboutToolStripMenuItem = new ToolStripMenuItem();
             currentTaskLabel = new Label();
             etaMbLbl = new Label();
@@ -138,7 +142,7 @@
             // 
             // menuStrip1
             // 
-            menuStrip1.Items.AddRange(new ToolStripItem[] { fileToolStripMenuItem, aboutToolStripMenuItem });
+            menuStrip1.Items.AddRange(new ToolStripItem[] { fileToolStripMenuItem, toolStripMenuItem2, aboutToolStripMenuItem });
             menuStrip1.Location = new Point(0, 0);
             menuStrip1.Name = "menuStrip1";
             menuStrip1.Size = new Size(481, 24);
@@ -147,17 +151,45 @@
             // 
             // fileToolStripMenuItem
             // 
-            fileToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { settingsToolStripMenuItem });
+            fileToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { settingsToolStripMenuItem, logFileToolStripMenuItem });
             fileToolStripMenuItem.Name = "fileToolStripMenuItem";
             fileToolStripMenuItem.Size = new Size(37, 20);
             fileToolStripMenuItem.Text = "File";
             // 
             // settingsToolStripMenuItem
             // 
+            settingsToolStripMenuItem.BackColor = SystemColors.Control;
             settingsToolStripMenuItem.Name = "settingsToolStripMenuItem";
             settingsToolStripMenuItem.Size = new Size(180, 22);
             settingsToolStripMenuItem.Text = "Settings...";
             settingsToolStripMenuItem.Click += settingsToolStripMenuItem_Click;
+            // 
+            // logFileToolStripMenuItem
+            // 
+            logFileToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { openLogFileToolStripMenuItem, openLogFileFolderToolStripMenuItem });
+            logFileToolStripMenuItem.Name = "logFileToolStripMenuItem";
+            logFileToolStripMenuItem.Size = new Size(180, 22);
+            logFileToolStripMenuItem.Text = "Log File...";
+            // 
+            // openLogFileToolStripMenuItem
+            // 
+            openLogFileToolStripMenuItem.Name = "openLogFileToolStripMenuItem";
+            openLogFileToolStripMenuItem.Size = new Size(192, 22);
+            openLogFileToolStripMenuItem.Text = "Open Log File...";
+            openLogFileToolStripMenuItem.Click += openLogFileToolStripMenuItem_Click;
+            // 
+            // openLogFileFolderToolStripMenuItem
+            // 
+            openLogFileFolderToolStripMenuItem.Name = "openLogFileFolderToolStripMenuItem";
+            openLogFileFolderToolStripMenuItem.Size = new Size(192, 22);
+            openLogFileFolderToolStripMenuItem.Text = "Open Log File Folder...";
+            openLogFileFolderToolStripMenuItem.Click += openLogFileFolderToolStripMenuItem_Click;
+            // 
+            // toolStripMenuItem2
+            // 
+            toolStripMenuItem2.Name = "toolStripMenuItem2";
+            toolStripMenuItem2.Size = new Size(94, 20);
+            toolStripMenuItem2.Text = "Recent Links...";
             // 
             // aboutToolStripMenuItem
             // 
@@ -181,7 +213,7 @@
             // 
             etaMbLbl.AutoSize = true;
             etaMbLbl.Font = new Font("Segoe UI", 8.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
-            etaMbLbl.ForeColor = Color.Red;
+            etaMbLbl.ForeColor = Color.White;
             etaMbLbl.Location = new Point(440, 467);
             etaMbLbl.Name = "etaMbLbl";
             etaMbLbl.Size = new Size(0, 13);
@@ -203,6 +235,7 @@
             // cancelDownloads
             // 
             cancelDownloads.BackColor = SystemColors.Control;
+            cancelDownloads.Enabled = false;
             cancelDownloads.FlatStyle = FlatStyle.System;
             cancelDownloads.Font = new Font("Segoe UI", 9F, FontStyle.Bold, GraphicsUnit.Point, 0);
             cancelDownloads.ForeColor = Color.Black;
@@ -267,5 +300,10 @@
         private TextBox textBox1;
         private Button button1;
         private Button cancelDownloads;
+        private ToolStripMenuItem toolStripMenuItem1;
+        private ToolStripMenuItem logFileToolStripMenuItem;
+        private ToolStripMenuItem openLogFileToolStripMenuItem;
+        private ToolStripMenuItem openLogFileFolderToolStripMenuItem;
+        private ToolStripMenuItem toolStripMenuItem2;
     }
 }

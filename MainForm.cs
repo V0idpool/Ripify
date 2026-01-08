@@ -13,6 +13,9 @@ namespace Ripify
     {
         private SpotifyClient spotify;
         private List<string> trackQueries = new();
+        private List<string> failedTrackQueries = new();
+        private CancellationTokenSource cts;
+        private RecentFilesManager recentLinkManager;
         private string clientID;
         private string clientSecret;
         public int concurrentDownloads;
@@ -30,21 +33,16 @@ namespace Ripify
         private void MainForm_Load(object sender, EventArgs e)
         {
             string exePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "yt-dlp.exe");
-            if (!File.Exists(exePath))
-            {
-                string resourceName = "Ripify.Executables.yt-dlp.exe";
-                Ripify.Helpers.SaveFiles.SaveToDisk(resourceName, exePath);
-            }
-            if (!File.Exists(exeFfmpeg))
-            {
-                string resourceName = "Ripify.Executables.ffmpeg.exe";
-                Ripify.Helpers.SaveFiles.SaveToDisk(resourceName, exeFfmpeg);
-            }
-            if (!File.Exists(exeFfprobe))
-            {
-                string resourceName = "Ripify.Executables.ffprobe.exe";
-                Ripify.Helpers.SaveFiles.SaveToDisk(resourceName, exeFfprobe);
-            }
+
+            string ytdlpName = "Ripify.Executables.yt-dlp.exe";
+            Ripify.Helpers.SaveFiles.SaveToDisk(ytdlpName, exePath);
+
+            string exeFfmpegName = "Ripify.Executables.ffmpeg.exe";
+            Ripify.Helpers.SaveFiles.SaveToDisk(exeFfmpegName, exeFfmpeg);
+
+            string exeFfprobeName = "Ripify.Executables.ffprobe.exe";
+            Ripify.Helpers.SaveFiles.SaveToDisk(exeFfprobeName, exeFfprobe);
+
             string userfile;
             userfile = @"\UserCFG.ini";
             string userconfigs;
@@ -56,6 +54,11 @@ namespace Ripify
             }
             var ini = new Ripify.Helpers.IniHandler();
             ini.Path = Application.StartupPath + @"\UserCFG.ini";
+            recentLinkManager = new RecentFilesManager(
+        toolStripMenuItem2,
+        (link) => { playListURL.Text = link; }, // Callback: when clicked, put link in textbox
+        ini
+    );
             if (string.IsNullOrEmpty(Helpers.IniHandler.UserSettings(Application.StartupPath + userfile, "ClientID")))
             {
                 clientID = "Input Spotify Client ID...";
@@ -159,16 +162,17 @@ namespace Ripify
                 .Replace("hq", "")
                 .Trim();
         }
-        private async Task<bool> DownloadAudioFromYoutube(string videoUrl, string outputFolder, int currentIndex, int totalCount)
+        private async Task<bool> DownloadAudioFromYoutube(string videoUrl, string outputFolder, CancellationToken token, int currentIndex, int totalCount)
         {
 
             string ytDlpPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "yt-dlp.exe");
+
             string outputTemplate = Path.Combine(outputFolder, "%(title)s.%(ext)s");
 
             var psi = new ProcessStartInfo
             {
                 FileName = ytDlpPath,
-                Arguments = $"--extract-audio --audio-format mp3 --restrict-filenames --cookies \"{cookiesPath}\" --ffmpeg-location \"{ffmpegFolder}\" -o \"{outputTemplate}\" \"{videoUrl}\"",
+                Arguments = $"--extract-audio --audio-format mp3 --cookies \"{cookiesPath}\" --ffmpeg-location \"{ffmpegFolder}\" -o \"{outputTemplate}\" \"{videoUrl}\"",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -188,35 +192,79 @@ namespace Ripify
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
-            await process.WaitForExitAsync();
-            // Check if process was successful
+            using var registration = token.Register(() =>
+            {
+                Task.Run(() =>
+                {
+                    try { if (!process.HasExited) process.Kill(true); } catch { }
+                });
+            });
+
+            try
+            {
+                await process.WaitForExitAsync(token);
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
+            }
+
             if (process.ExitCode != 0)
             {
-                ExceptionHandler.LogDownload($"yt-dlp failed with exit code {process.ExitCode}: {stderr} | Output: {stdout}");
+                if (!token.IsCancellationRequested)
+                {
+                    ExceptionHandler.LogDownload($"yt-dlp failed with exit code {process.ExitCode}: {stderr} | Output: {stdout}");
+                }
                 return false;
             }
             return true;
+        }
+        private void UpdateFetchStatus(ProgressForm form, int current, int total, TimeSpan elapsed)
+        {
+            if (total <= 0) return;
+
+            // Calculate percentage
+            int percentage = (int)((double)current / total * 100);
+            form.UpdateProgress(percentage);
+
+            // Calculate ETA: (Elapsed Time / Current Count) * Remaining Count
+            if (current > 0)
+            {
+                double milliPerTrack = elapsed.TotalMilliseconds / current;
+                double remainingMilli = milliPerTrack * (total - current);
+                form.UpdateEstimatedTime(TimeSpan.FromMilliseconds(remainingMilli));
+            }
         }
         private async void fetchBTN_Click(object sender, EventArgs e)
         {
             fetchBTN.Enabled = false;
             trackList.Items.Clear();
             trackQueries.Clear();
+            
+            var progressForm = new ProgressForm();
+            progressForm.Show();
 
             try
             {
+                this.recentLinkManager.AddLink(playListURL.Text);
                 var (type, id) = ExtractPlaylistId(playListURL.Text);
                 if (string.IsNullOrEmpty(type) || string.IsNullOrEmpty(id))
                 {
                     MessageBox.Show("Invalid Spotify playlist or album URL.");
                     return;
                 }
-
+                
                 await InitializeSpotifyClient();
+                Stopwatch sw = Stopwatch.StartNew();
 
                 if (type == "playlist")
                 {
-                    var items = spotify.Paginate(await spotify.Playlists.GetItems(id));
+                    var firstPage = await spotify.Playlists.GetItems(id);
+                    int totalTracks = firstPage.Total ?? 0;
+
+                    var items = spotify.Paginate(firstPage);
+                    int currentCount = 0;
+
                     await foreach (var item in items)
                     {
                         if (item.Track is FullTrack track)
@@ -224,13 +272,27 @@ namespace Ripify
                             string query = $"{track.Artists[0].Name} - {track.Name}";
                             trackQueries.Add(query);
                             trackList.Items.Add(query);
+                            currentCount++;
+                          
+                            UpdateFetchStatus(progressForm, currentCount, totalTracks, sw.Elapsed);
                         }
                     }
 
-                    MessageBox.Show($"Fetched {trackQueries.Count} tracks from playlist.");
+                    var toast = new ToastForm($"Fetched {trackQueries.Count} tracks from playlist.");
+                    int screenWidth = Screen.PrimaryScreen.WorkingArea.Width;
+                    int screenHeight = Screen.PrimaryScreen.WorkingArea.Height;
+
+                    int x = (screenWidth - toast.Width) / 2;
+                    int y = (screenHeight - toast.Height) / 2;
+                    toast.ShowAt(new Point(x, y));
+                    toast.Refresh();
                 }
                 else if (type == "album")
                 {
+                    var album = await spotify.Albums.Get(id);
+                    int totalTracks = album.Tracks.Total ?? 0;
+                    int currentCount = 0;
+
                     int offset = 0;
                     const int limit = 50;
                     bool moreItems = true;
@@ -244,18 +306,34 @@ namespace Ripify
                             string query = $"{track.Artists[0].Name} - {track.Name}";
                             trackQueries.Add(query);
                             trackList.Items.Add(query);
+                            currentCount++;
+
+                            UpdateFetchStatus(progressForm, currentCount, totalTracks, sw.Elapsed);
                         }
 
                         offset += limit;
                         moreItems = page.Next != null;
                     }
+                    
+                    var toast = new ToastForm($"Fetched {trackQueries.Count} tracks from album.");
+                    int screenWidth = Screen.PrimaryScreen.WorkingArea.Width;
+                    int screenHeight = Screen.PrimaryScreen.WorkingArea.Height;
 
-                    MessageBox.Show($"Fetched {trackQueries.Count} tracks from album.");
+                    int x = (screenWidth - toast.Width) / 2;
+                    int y = (screenHeight - toast.Height) / 2;
+                    toast.ShowAt(new Point(x, y));
+                    toast.Refresh();
                 }
                 else
                 {
                     MessageBox.Show("Only playlist and album URLs are supported.");
                 }
+
+                progressForm.UpdateProgress(100); 
+                await Task.Delay(2000);
+                progressForm.Close();
+                progressForm.Dispose();
+                progressForm = null;
             }
             catch (Exception ex)
             {
@@ -270,13 +348,16 @@ namespace Ripify
         private async void downloadSelected_Click(object sender, EventArgs e)
         {
             List<string> failedDownloads = new();
-            string userfile;
-            userfile = @"\UserCFG.ini";
+            string userfile = @"\UserCFG.ini";
+            cts = new CancellationTokenSource();
+            var token = cts.Token;
+
             if (trackList.SelectedItems.Count == 0)
             {
                 MessageBox.Show("Select at least one track to download.");
                 return;
             }
+
             if (!File.Exists(cookiesPath))
             {
                 var result = MessageBox.Show(
@@ -309,172 +390,183 @@ namespace Ripify
                     return;
                 saveFolder = folderBrowserDialog1.SelectedPath;
             }
-            if (etaMbLbl.InvokeRequired)
-            {
-                Invoke(() => etaMbLbl.Text = "0%");
-            }
-            else
+
+            Invoke(() =>
             {
                 etaMbLbl.Text = "0%";
-            }
-            if (currentTaskLabel.InvokeRequired)
-            {
-                Invoke(() => currentTaskLabel.Text = "0/0");
-            }
-            else
-            {
                 currentTaskLabel.Text = "0/0";
-            }
+            });
+
             downloadSelected.Enabled = false;
+            cancelDownloads.Enabled = true;
 
             var youtube = new YoutubeClient();
-            int maxConcurrency = concurrentDownloads; // Limit to 3 concurrent downloads TODO: experiment with values
+            int maxConcurrency = concurrentDownloads;
             var semaphore = new SemaphoreSlim(maxConcurrency);
 
             progressBar1.Maximum = trackList.SelectedItems.Count;
             progressBar1.Value = 0;
 
-            int startedCount = 0;
             var downloadTasks = new List<Task>();
             var selectedItems = trackList.SelectedItems.Cast<string>().ToList();
             int totalCount = selectedItems.Count;
             int completedCount = 0;
 
-            for (int i = 0; i < totalCount; i++)
+            try
             {
-                string query = selectedItems[i];
-
-                await semaphore.WaitAsync();
-
-                var task = Task.Run(async () =>
+                for (int i = 0; i < totalCount; i++)
                 {
-                    try
+                    if (token.IsCancellationRequested) break;
+                    string query = selectedItems[i];
+
+                    await semaphore.WaitAsync(token);
+
+                    var task = Task.Run(async () =>
                     {
-                        int startedIndex = i + 1;
-
-                        Invoke(() => currentTaskLabel.Text = $"{startedIndex}/{totalCount}");
-                        // Extract artist + title ONCE per query
-                        string artist = "";
-                        string title = "";
-                        int dashIdx = query.IndexOf("-");
-
-                        if (dashIdx > 0)
+                        try
                         {
-                            artist = query[..dashIdx].Trim();
-                            title = query[(dashIdx + 1)..].Trim();
-                        }
-                        else
-                        {
-                            title = query;
-                        }
+                            await Task.Delay(new Random().Next(2000, 5000), token);
+                            int startedIndex = i + 1;
 
-                        // Check BEFORE searching YouTube
-                        if (TrackAlreadyExists(artist, title, saveFolder))
-                        {
-                            Invoke(() => progressLbl.Text = $"Skipping existing: {title}");
+                            Invoke(() => currentTaskLabel.Text = $"{startedIndex}/{totalCount}");
 
-                            // Count as completed but DO NOT search/download
-                            lock (failedDownloads)
+                            string artist = "";
+                            string title = "";
+                            int dashIdx = query.IndexOf("-");
+
+                            if (dashIdx > 0)
                             {
-                                completedCount++;
-                            }
-
-                            Invoke(() =>
-                            {
-                                progressBar1.Value = completedCount;
-                                etaMbLbl.Text = $"{(int)((completedCount / (double)totalCount) * 100)}%";
-                            });
-
-                            return; // IMPORTANT → avoid double semaphore release & double progress
-                        }
-                        var searchResults = youtube.Search.GetVideosAsync(query).Take(5);
-                        bool found = false;
-                        await foreach (var video in searchResults)
-                        {
-                            if (string.IsNullOrEmpty(video?.Url)) continue;
-
-                            Invoke(() => progressLbl.Text = $"Downloading: {video.Title}");
-
-                            bool success = await DownloadAudioFromYoutube(video.Url, saveFolder, i + 1, totalCount);
-                            if (success)
-                            {
-                                found = true;
-                                break;
+                                artist = query[..dashIdx].Trim();
+                                title = query[(dashIdx + 1)..].Trim();
                             }
                             else
                             {
-                                ExceptionHandler.LogDownload($"Failed to download {video.Title}, trying next result...");
+                                title = query;
                             }
-                        }
 
-                        if (!found)
-                        {
+                            if (TrackAlreadyExists(artist, title, saveFolder))
+                            {
+                                Invoke(() => progressLbl.Text = $"Skipping existing: {title}");
+                                lock (failedDownloads) { completedCount++; }
+                                Invoke(() =>
+                                {
+                                    progressBar1.Value = completedCount;
+                                    etaMbLbl.Text = $"{(int)((completedCount / (double)totalCount) * 100)}%";
+                                });
+                                return; // This return now safely hits the finally block below
+                            }
+
+                            var searchResults = youtube.Search.GetVideosAsync(query).Take(5);
+                            bool found = false;
+
+                            await foreach (var video in searchResults)
+                            {
+                                token.ThrowIfCancellationRequested();
+                                if (string.IsNullOrEmpty(video?.Url)) continue;
+
+                                Invoke(() => progressLbl.Text = $"Downloading: {video.Title}");
+
+                                bool success = await DownloadAudioFromYoutube(video.Url, saveFolder, token, i + 1, totalCount);
+                                if (success)
+                                {
+                                    found = true;
+                                    break;
+                                }
+                            }
+
+                            if (!found)
+                            {
+                                lock (failedDownloads) { failedDownloads.Add($"{query} (No valid YouTube video found)"); }
+                                lock (failedTrackQueries) { failedTrackQueries.Add(query); }
+                            }
+
                             lock (failedDownloads)
                             {
-                                failedDownloads.Add($"{query} (No valid YouTube video found)");
+                                completedCount++;
+                                Invoke(() =>
+                                {
+                                    progressBar1.Value = completedCount;
+                                    etaMbLbl.Text = $"{(int)((completedCount / (double)totalCount) * 100)}%";
+                                });
                             }
                         }
+                        catch (OperationCanceledException) { /* Task-level cancel */ }
+                        catch (Exception ex)
+                        {
+                            lock (failedDownloads) { failedDownloads.Add($"{query} (Error: {ex.Message})"); }
+                            lock (failedTrackQueries) { failedTrackQueries.Add(query); }
+                            ExceptionHandler.LogDownload($"{query} (Error: {ex.Message})");
+                        }
+                        finally
+                        {
+                            semaphore.Release();
+                        }
+                    }, token);
 
-                        lock (failedDownloads)
-                        {
-                            completedCount++;
-                            Invoke(() =>
-                            {
-                                progressBar1.Value = completedCount;
-                                int percent = (int)((completedCount / (double)totalCount) * 100);
-                                etaMbLbl.Text = $"{percent}%";
-                            });
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        lock (failedDownloads)
-                        {
-                            failedDownloads.Add($"{query} (Error: {ex.Message})");
-                        }
-                        ExceptionHandler.LogDownload($"{query} (Error: {ex.Message})");
-                    }
-                    finally
-                    {
-                        semaphore.Release();
-                    }
+                    downloadTasks.Add(task);
+                }
+
+                await Task.WhenAll(downloadTasks);
+            }
+            catch (OperationCanceledException)
+            {
+                Invoke(() => progressLbl.Text = "Downloads cancelled.");
+                Invoke(() => currentTaskLabel.Text = "0/0");
+                Invoke(() => etaMbLbl.Text = " ");
+                Invoke(() => progressBar1.Value = 0);
+
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Fatal Error: " + ex.Message);
+            }
+            finally
+            {
+                Invoke(() =>
+                {
+                    if (progressLbl.Text != "Downloads cancelled.")
+                        progressLbl.Text = "Download complete!";
+
+                    currentTaskLabel.Text = $"{completedCount}/{totalCount}";
+                    downloadSelected.Enabled = true;
+                    cancelDownloads.Enabled = false;
                 });
+                Invoke(() => etaMbLbl.Text = " ");
+                Invoke(() => progressBar1.Value = 0);
 
-                downloadTasks.Add(task);
-            }
-
-            await Task.WhenAll(downloadTasks);
-
-            Invoke(() =>
-            {
-                progressLbl.Text = "Download complete!";
-                currentTaskLabel.Text = $"{totalCount}/{totalCount}";
-            });
-
-
-            if (failedDownloads.Count > 0)
-            {
-                string failedList = string.Join("\n", failedDownloads);
-                var result = MessageBox.Show($"Some tracks failed to download.\nWould you like to open the log file for more details?\n\n{failedDownloads.Count} tracks failed!", "Download Completed with Errors", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-                if (result == DialogResult.Yes)
+                if (failedDownloads.Count > 0 && !token.IsCancellationRequested)
                 {
-                    string logPath = Path.Combine(Application.StartupPath, "log_file.txt");
-                    if (File.Exists(logPath))
-                        ExceptionHandler.LogInternalError($"{failedDownloads.Count} tracks failed:\n\n{failedList}");
-                    Process.Start("notepad.exe", logPath);
+                    string failedList = string.Join("\n", failedDownloads);
+                    var result = MessageBox.Show(
+                 $"{failedTrackQueries.Count} tracks failed to download.\n\n" +
+                 "Would you like to select the failed tracks in the list to try again?",
+                 "Download Errors",
+                 MessageBoxButtons.YesNo,
+                 MessageBoxIcon.Warning);
+
+                    if (result == DialogResult.Yes)
+                    {
+                        // Clear current selection
+                        trackList.SelectedItems.Clear();
+
+                        // Loop through the list and select the matches
+                        foreach (string failedQuery in failedTrackQueries)
+                        {
+                            int index = trackList.Items.IndexOf(failedQuery);
+                            if (index != -1)
+                            {
+                                trackList.SetSelected(index, true);
+                            }
+                        }
+                    }
                 }
-            }
-            else
-            {
-                var result = MessageBox.Show("All selected tracks downloaded successfully.\nWould you like to open the log file for more details?", "Download Completed", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
-                if (result == DialogResult.Yes)
+                else if (!token.IsCancellationRequested)
                 {
-                    string logPath = Path.Combine(Application.StartupPath, "log_file.txt");
-                    if (File.Exists(logPath))
-                        Process.Start("notepad.exe", logPath);
+                    MessageBox.Show("All selected tracks downloaded successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
+
+                cts.Dispose();
             }
-            downloadSelected.Enabled = true;
         }
 
         private void settingsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -499,7 +591,73 @@ namespace Ripify
 
         private void cancelDownloads_Click(object sender, EventArgs e)
         {
+            if (cts != null)
+            {
+                var toast = new ToastForm("Cancelling, please wait...");
+                int screenWidth = Screen.PrimaryScreen.WorkingArea.Width;
+                int screenHeight = Screen.PrimaryScreen.WorkingArea.Height;
 
+                int x = (screenWidth - toast.Width) / 2;
+                int y = (screenHeight - toast.Height) / 2;
+                toast.ShowAt(new Point(x, y));
+                toast.Refresh();
+                cts.Cancel();
+                
+                progressLbl.Text = "Cancelling... please wait.";
+                cancelDownloads.Enabled = false;
+            }
+        }
+
+        private void openLogFileToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                // Assuming GetLogFilePath() ensures the directory is created as you defined previously.
+                string logFilePath = ExceptionHandler.GetLogFilePath();
+
+                // Check if the log file exists (it may not if no errors have occurred yet)
+                if (System.IO.File.Exists(logFilePath))
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(logFilePath)
+                    {
+                        UseShellExecute = true // Crucial for opening non-executable files like .txt
+                    });
+                }
+                else
+                {
+                    // Optionally, open the containing folder instead if the file is missing
+                    string logDirectory = System.IO.Path.GetDirectoryName(logFilePath);
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(logDirectory)
+                    {
+                        UseShellExecute = true
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.LogMessage($"Could not open log file: {ex.Message}");
+                MessageBox.Show($"Could not open log file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void openLogFileFolderToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                string logFilePath = ExceptionHandler.GetLogFilePath();
+                // Optionally, open the containing folder instead if the file is missing
+                string logDirectory = System.IO.Path.GetDirectoryName(logFilePath);
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(logDirectory)
+                {
+                    UseShellExecute = true
+                });
+            }
+
+            catch (Exception ex)
+            {
+                ExceptionHandler.LogMessage($"Could not open log file: {ex.Message}");
+                MessageBox.Show($"Could not open log file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
     }
 }
