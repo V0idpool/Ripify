@@ -1,12 +1,19 @@
 ﻿using Microsoft.VisualBasic;
 using Microsoft.VisualBasic.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text;
 namespace Ripify.Helpers
 {
     public class IniHandler
     {
         [DllImport("kernel32", EntryPoint = "GetPrivateProfileStringA", CharSet = CharSet.Ansi)]
-        private static extern int GetPrivateProfileString(string lpApplicationName, string lpKeyName, string lpDefault, string lpReturnedString, int nSize, string lpFileName);
+        private static extern int GetPrivateProfileString(
+     string lpApplicationName,
+     string lpKeyName,
+     string lpDefault,
+     StringBuilder lpReturnedString, // Change this from string to StringBuilder
+     int nSize,
+     string lpFileName);
 
         [DllImport("kernel32", EntryPoint = "WritePrivateProfileStringA", CharSet = CharSet.Ansi)]
         private static extern int WritePrivateProfileString(string lpApplicationName, string lpKeyName, string lpString, string lpFileName);
@@ -34,26 +41,17 @@ namespace Ripify.Helpers
         }
         public string ReadValue(string Section, string Key, string DefaultValue = "", int BufferSize = 1024)
         {
-            string ReadValueRet = default;
+            if (string.IsNullOrEmpty(Path)) return DefaultValue;
 
-            if (string.IsNullOrEmpty(Path))
-            {
-                Interaction.MsgBox("No path given" + Constants.vbNewLine + "Could not read Value", MsgBoxStyle.Critical, "No path given");
-                ReadValueRet = "Error";
-                return ReadValueRet;
-            }
+            if (!System.IO.File.Exists(Path)) return DefaultValue;
 
-            if (System.IO.File.Exists(Path) == false)
-            {
-                Interaction.MsgBox("File does not exist" + Constants.vbNewLine + "Could not read Value", MsgBoxStyle.Critical, "File does not exist");
-                ReadValueRet = "Error";
-                return ReadValueRet;
-            }
+            // Use a StringBuilder instead of Strings.Space for better memory handling with Win32
+            StringBuilder sb = new StringBuilder(BufferSize);
+            int length = GetPrivateProfileString(Section, Key, DefaultValue, sb, BufferSize, Path);
 
-            string sTemp = Strings.Space(BufferSize);
-            int Length = IniHandler.GetPrivateProfileString(Section, Key, DefaultValue, sTemp, BufferSize, Path);
-            return Strings.Left(sTemp, Length);
-
+            // This is the critical fix: .ToString() on StringBuilder only takes 
+            // the characters up to the length returned by the API.
+            return sb.ToString().Trim();
         }
 
         public bool GetBoolean(string Section, string Key, bool Default)

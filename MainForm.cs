@@ -32,10 +32,14 @@ namespace Ripify
 
         private void MainForm_Load(object sender, EventArgs e)
         {
-            string exePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "yt-dlp.exe");
+            string ytdlpExePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "yt-dlp.exe");
+            string qjscExePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "qjs.exe");
 
             string ytdlpName = "Ripify.Executables.yt-dlp.exe";
-            Ripify.Helpers.SaveFiles.SaveToDisk(ytdlpName, exePath);
+            Ripify.Helpers.SaveFiles.SaveToDisk(ytdlpName, ytdlpExePath);
+
+            string qjscName = "Ripify.Executables.qjs.exe";
+            Ripify.Helpers.SaveFiles.SaveToDisk(qjscName, qjscExePath);
 
             string exeFfmpegName = "Ripify.Executables.ffmpeg.exe";
             Ripify.Helpers.SaveFiles.SaveToDisk(exeFfmpegName, exeFfmpeg);
@@ -55,10 +59,10 @@ namespace Ripify
             var ini = new Ripify.Helpers.IniHandler();
             ini.Path = Application.StartupPath + @"\UserCFG.ini";
             recentLinkManager = new RecentFilesManager(
-        toolStripMenuItem2,
-        (link) => { playListURL.Text = link; }, // Callback: when clicked, put link in textbox
-        ini
-    );
+          toolStripMenuItem2,
+          (link) => { playListURL.Text = link; },
+          ini
+      );
             if (string.IsNullOrEmpty(Helpers.IniHandler.UserSettings(Application.StartupPath + userfile, "ClientID")))
             {
                 clientID = "Input Spotify Client ID...";
@@ -169,11 +173,21 @@ namespace Ripify
 
             string outputTemplate = Path.Combine(outputFolder, "%(title)s.%(ext)s");
 
+            string qjsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "qjs.exe");
             var psi = new ProcessStartInfo
             {
                 FileName = ytDlpPath,
-                Arguments = $"--extract-audio --audio-format mp3 --cookies \"{cookiesPath}\" --ffmpeg-location \"{ffmpegFolder}\" -o \"{outputTemplate}\" \"{videoUrl}\"",
-                UseShellExecute = false,
+                Arguments = $"--extract-audio --audio-format mp3 " +
+            $"-f \"bestaudio/best\" " +
+            $"--js-runtimes \"quickjs:{qjsPath}\" " +
+            $"--cookies \"{cookiesPath}\" " +
+            $"--ffmpeg-location \"{ffmpegFolder}\" " +
+            $"--extractor-args \"youtube:player-client=android,web;player-skip=web_embedded\" " +
+            $"--sleep-requests 2 --sleep-interval 4 " +
+            $"--no-check-certificate --no-warnings " +
+            $"--user-agent \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\" " +
+            $"-o \"{outputTemplate}\" \"{videoUrl}\"",
+            UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 CreateNoWindow = true

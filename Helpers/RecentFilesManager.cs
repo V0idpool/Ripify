@@ -9,7 +9,6 @@ namespace Ripify.Helpers
     public class RecentFilesManager
     {
         private const int MaxRecentFiles = 10;
-        private const string IniSection = "RecentLinks";
         private readonly ToolStripMenuItem _recentLinksMenuItem;
         private readonly Action<string> _openLinkCallback;
         private readonly IniHandler _ini;
@@ -30,7 +29,7 @@ namespace Ripify.Helpers
             _recentLinksList.Clear();
             for (int i = 0; i < MaxRecentFiles; i++)
             {
-                string urlPath = _ini.ReadValue(IniSection, $"Url{i}", " ");
+                string urlPath = _ini.ReadValue("RecentLinks", $"Url{i}", null);
                 if (!string.IsNullOrEmpty(urlPath))
                 {
                     _recentLinksList.Add(urlPath);
@@ -55,11 +54,11 @@ namespace Ripify.Helpers
 
         private void SaveRecentLinks()
         {
-            _ini.DeleteSection(IniSection);
+            _ini.DeleteSection("RecentLinks");
 
             for (int i = 0; i < _recentLinksList.Count; i++)
             {
-                _ini.WriteValue(IniSection, $"Url{i}", _recentLinksList[i], _ini.Path);
+                _ini.WriteValue("RecentLinks", $"Url{i}", _recentLinksList[i], _ini.Path);
             }
         }
 

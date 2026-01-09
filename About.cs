@@ -16,7 +16,7 @@ namespace Ripify
 
         private void linkLabel1_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
-            Process.Start(new ProcessStartInfo("https://buymeacoffee.com/byteknight") { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo("https://buymeacoffee.com/rustforgedev") { UseShellExecute = true });
         }
 
         private void linkLabel2_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)

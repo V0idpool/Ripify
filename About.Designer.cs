@@ -85,10 +85,10 @@
             linkLabel1.LinkColor = Color.FromArgb(255, 128, 0);
             linkLabel1.Location = new Point(9, 236);
             linkLabel1.Name = "linkLabel1";
-            linkLabel1.Size = new Size(246, 17);
+            linkLabel1.Size = new Size(258, 17);
             linkLabel1.TabIndex = 1;
             linkLabel1.TabStop = true;
-            linkLabel1.Text = "https://buymeacoffee.com/byteknight";
+            linkLabel1.Text = "https://buymeacoffee.com/rustforgedev";
             linkLabel1.LinkClicked += linkLabel1_LinkClicked;
             // 
             // label1
