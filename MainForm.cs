@@ -141,7 +141,6 @@ namespace Ripify
                 string fileName = Path.GetFileNameWithoutExtension(file);
                 string normFile = Normalize(fileName);
 
-                // Match both artist + title inside the filename
                 if (normFile.Contains(normArtist) && normFile.Contains(normTitle))
                     return true;
             }
@@ -177,15 +176,15 @@ namespace Ripify
             var psi = new ProcessStartInfo
             {
                 FileName = ytDlpPath,
-                Arguments = $"--extract-audio --audio-format mp3 " +
-            $"-f \"bestaudio/best\" " +
+                Arguments = $"--extract-audio --audio-format mp3 --audio-quality 320k " +
             $"--js-runtimes \"quickjs:{qjsPath}\" " +
             $"--cookies \"{cookiesPath}\" " +
             $"--ffmpeg-location \"{ffmpegFolder}\" " +
-            $"--extractor-args \"youtube:player-client=android,web;player-skip=web_embedded\" " +
-            $"--sleep-requests 2 --sleep-interval 4 " +
+            $"--extractor-args \"youtube:player-client=android,web;player-skip=web_embedded,tv,ios,mweb\" " +
+            $"-f \"ba/b\" " +
+            $"--sleep-requests 3 --sleep-interval 5 " +
             $"--no-check-certificate --no-warnings " +
-            $"--user-agent \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\" " +
+            $"--user-agent \"com.google.android.youtube/19.29.37 (Linux; U; Android 14) gzip\" " +
             $"-o \"{outputTemplate}\" \"{videoUrl}\"",
             UseShellExecute = false,
                 RedirectStandardOutput = true,
@@ -237,11 +236,9 @@ namespace Ripify
         {
             if (total <= 0) return;
 
-            // Calculate percentage
             int percentage = (int)((double)current / total * 100);
             form.UpdateProgress(percentage);
 
-            // Calculate ETA: (Elapsed Time / Current Count) * Remaining Count
             if (current > 0)
             {
                 double milliPerTrack = elapsed.TotalMilliseconds / current;
@@ -467,7 +464,7 @@ namespace Ripify
                                     progressBar1.Value = completedCount;
                                     etaMbLbl.Text = $"{(int)((completedCount / (double)totalCount) * 100)}%";
                                 });
-                                return; // This return now safely hits the finally block below
+                                return;
                             }
 
                             var searchResults = youtube.Search.GetVideosAsync(query).Take(5);
@@ -560,10 +557,8 @@ namespace Ripify
 
                     if (result == DialogResult.Yes)
                     {
-                        // Clear current selection
                         trackList.SelectedItems.Clear();
 
-                        // Loop through the list and select the matches
                         foreach (string failedQuery in failedTrackQueries)
                         {
                             int index = trackList.Items.IndexOf(failedQuery);
