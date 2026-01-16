@@ -25,6 +25,8 @@ namespace Ripify
         string ffmpegFolder = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
         private string exeFfprobe = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffprobe.exe");
         private string cookiesPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cookies.txt");
+        // TODO: Utilize GdiPlusLock for new Custom Theme
+        public static readonly object GdiPlusLock = new object();
         public MainForm()
         {
             InitializeComponent();
@@ -186,7 +188,7 @@ namespace Ripify
             $"--no-check-certificate --no-warnings " +
             $"--user-agent \"com.google.android.youtube/19.29.37 (Linux; U; Android 14) gzip\" " +
             $"-o \"{outputTemplate}\" \"{videoUrl}\"",
-            UseShellExecute = false,
+                UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 CreateNoWindow = true
@@ -251,10 +253,34 @@ namespace Ripify
             fetchBTN.Enabled = false;
             trackList.Items.Clear();
             trackQueries.Clear();
-            
+            Invoke(() => progressLbl.Text = "Waiting...");
+            Invoke(() => currentTaskLabel.Text = "0/0");
+            Invoke(() => etaMbLbl.Text = " ");
+            Invoke(() => progressBar1.Value = 0);
+            string inputUrl = playListURL.Text.Trim();
+            var selectedItems = trackList.SelectedItems.Cast<string>().ToList();
+            var youtube = new YoutubeClient();
+            int currentCount = 0;
+            // --- ADD THIS BLOCK FOR YOUTUBE LINKS ---
+           
+
             var progressForm = new ProgressForm();
             progressForm.Show();
+            if (inputUrl.Contains("youtube.com") || inputUrl.Contains("youtu.be"))
+            {
+                Stopwatch swYT = Stopwatch.StartNew();
+                var videoInfo = await youtube.Videos.GetAsync(inputUrl);
+                trackQueries.Add(videoInfo.Title);
+                trackList.Items.Add(videoInfo.Title);
+                currentCount++;
 
+                UpdateFetchStatus(progressForm, currentCount, 1, swYT.Elapsed);
+
+                await Task.Delay(1000); // Let the user see 100%
+                progressForm.Close();
+                fetchBTN.Enabled = true;
+                return; // Exit early, do not run Spotify logic
+            }
             try
             {
                 this.recentLinkManager.AddLink(playListURL.Text);
@@ -264,7 +290,7 @@ namespace Ripify
                     MessageBox.Show("Invalid Spotify playlist or album URL.");
                     return;
                 }
-                
+
                 await InitializeSpotifyClient();
                 Stopwatch sw = Stopwatch.StartNew();
 
@@ -274,17 +300,17 @@ namespace Ripify
                     int totalTracks = firstPage.Total ?? 0;
 
                     var items = spotify.Paginate(firstPage);
-                    int currentCount = 0;
+                    
 
                     await foreach (var item in items)
                     {
                         if (item.Track is FullTrack track)
                         {
-                            string query = $"{track.Artists[0].Name} - {track.Name}";
-                            trackQueries.Add(query);
-                            trackList.Items.Add(query);
+                            string queryPlaylist = $"{track.Artists[0].Name} - {track.Name}";
+                            trackQueries.Add(queryPlaylist);
+                            trackList.Items.Add(queryPlaylist);
                             currentCount++;
-                          
+
                             UpdateFetchStatus(progressForm, currentCount, totalTracks, sw.Elapsed);
                         }
                     }
@@ -302,7 +328,7 @@ namespace Ripify
                 {
                     var album = await spotify.Albums.Get(id);
                     int totalTracks = album.Tracks.Total ?? 0;
-                    int currentCount = 0;
+                    currentCount = 0;
 
                     int offset = 0;
                     const int limit = 50;
@@ -314,9 +340,9 @@ namespace Ripify
 
                         foreach (var track in page.Items)
                         {
-                            string query = $"{track.Artists[0].Name} - {track.Name}";
-                            trackQueries.Add(query);
-                            trackList.Items.Add(query);
+                            string queryAlbum = $"{track.Artists[0].Name} - {track.Name}";
+                            trackQueries.Add(queryAlbum);
+                            trackList.Items.Add(queryAlbum);
                             currentCount++;
 
                             UpdateFetchStatus(progressForm, currentCount, totalTracks, sw.Elapsed);
@@ -325,7 +351,7 @@ namespace Ripify
                         offset += limit;
                         moreItems = page.Next != null;
                     }
-                    
+
                     var toast = new ToastForm($"Fetched {trackQueries.Count} tracks from album.");
                     int screenWidth = Screen.PrimaryScreen.WorkingArea.Width;
                     int screenHeight = Screen.PrimaryScreen.WorkingArea.Height;
@@ -335,12 +361,35 @@ namespace Ripify
                     toast.ShowAt(new Point(x, y));
                     toast.Refresh();
                 }
+                else if (type == "track")
+                {
+                    // Fetch single track details
+                    var track = await spotify.Tracks.Get(id);
+                    int totalTracks = 1;
+                    currentCount = 0;
+
+                    string queryTrack = $"{track.Artists[0].Name} - {track.Name}";
+                    trackQueries.Add(queryTrack);
+                    trackList.Items.Add(queryTrack);
+                    currentCount++;
+
+                    // Update status for the single item
+                    UpdateFetchStatus(progressForm, currentCount, totalTracks, sw.Elapsed);
+
+                    var toast = new ToastForm($"Fetched single track: {track.Name}");
+                    int screenWidth = Screen.PrimaryScreen.WorkingArea.Width;
+                    int screenHeight = Screen.PrimaryScreen.WorkingArea.Height;
+                    int x = (screenWidth - toast.Width) / 2;
+                    int y = (screenHeight - toast.Height) / 2;
+                    toast.ShowAt(new Point(x, y));
+                    toast.Refresh();
+                }
                 else
                 {
-                    MessageBox.Show("Only playlist and album URLs are supported.");
+                    MessageBox.Show("Only playlist, album and song URLs are supported.");
                 }
 
-                progressForm.UpdateProgress(100); 
+                progressForm.UpdateProgress(100);
                 await Task.Delay(2000);
                 progressForm.Close();
                 progressForm.Dispose();
@@ -466,39 +515,68 @@ namespace Ripify
                                 });
                                 return;
                             }
+                            bool isDirectLink = query.Contains("youtube.com") || query.Contains("youtu.be");
 
-                            var searchResults = youtube.Search.GetVideosAsync(query).Take(5);
-                            bool found = false;
-
-                            await foreach (var video in searchResults)
+                            if (isDirectLink)
                             {
-                                token.ThrowIfCancellationRequested();
-                                if (string.IsNullOrEmpty(video?.Url)) continue;
+                                var videoInfo = await youtube.Videos.GetAsync(query);
+                                Invoke(() => progressLbl.Text = $"Downloading: {videoInfo.Title}");
+                              
+                                bool success = await DownloadAudioFromYoutube(query, saveFolder, token, i + 1, totalCount);
 
-                                Invoke(() => progressLbl.Text = $"Downloading: {video.Title}");
-
-                                bool success = await DownloadAudioFromYoutube(video.Url, saveFolder, token, i + 1, totalCount);
-                                if (success)
+                                // Logic updated to match the 'else' block
+                                lock (failedDownloads)
                                 {
-                                    found = true;
-                                    break;
+                                    completedCount++;
+                                    Invoke(() =>
+                                    {
+                                        // Use the shared variables so progress moves correctly
+                                        progressBar1.Maximum = totalCount;
+                                        progressBar1.Value = completedCount;
+                                        etaMbLbl.Text = $"{(int)((completedCount / (double)totalCount) * 100)}%";
+                                    });
+
+                                    if (!success)
+                                    {
+                                        failedDownloads.Add($"{query} (Download Failed)");
+                                    }
                                 }
                             }
-
-                            if (!found)
+                            else
                             {
-                                lock (failedDownloads) { failedDownloads.Add($"{query} (No valid YouTube video found)"); }
-                                lock (failedTrackQueries) { failedTrackQueries.Add(query); }
-                            }
+                                var searchResults = youtube.Search.GetVideosAsync(query).Take(5);
+                                bool found = false;
 
-                            lock (failedDownloads)
-                            {
-                                completedCount++;
-                                Invoke(() =>
+                                await foreach (var video in searchResults)
                                 {
-                                    progressBar1.Value = completedCount;
-                                    etaMbLbl.Text = $"{(int)((completedCount / (double)totalCount) * 100)}%";
-                                });
+                                    token.ThrowIfCancellationRequested();
+                                    if (string.IsNullOrEmpty(video?.Url)) continue;
+
+                                    Invoke(() => progressLbl.Text = $"Downloading: {video.Title}");
+
+                                    bool success = await DownloadAudioFromYoutube(video.Url, saveFolder, token, i + 1, totalCount);
+                                    if (success)
+                                    {
+                                        found = true;
+                                        break;
+                                    }
+                                }
+
+                                if (!found)
+                                {
+                                    lock (failedDownloads) { failedDownloads.Add($"{query} (No valid YouTube video found)"); }
+                                    lock (failedTrackQueries) { failedTrackQueries.Add(query); }
+                                }
+
+                                lock (failedDownloads)
+                                {
+                                    completedCount++;
+                                    Invoke(() =>
+                                    {
+                                        progressBar1.Value = completedCount;
+                                        etaMbLbl.Text = $"{(int)((completedCount / (double)totalCount) * 100)}%";
+                                    });
+                                }
                             }
                         }
                         catch (OperationCanceledException) { /* Task-level cancel */ }
@@ -542,8 +620,8 @@ namespace Ripify
                     downloadSelected.Enabled = true;
                     cancelDownloads.Enabled = false;
                 });
-                Invoke(() => etaMbLbl.Text = " ");
-                Invoke(() => progressBar1.Value = 0);
+                //Invoke(() => etaMbLbl.Text = " ");
+                //Invoke(() => progressBar1.Value = 0);
 
                 if (failedDownloads.Count > 0 && !token.IsCancellationRequested)
                 {
@@ -611,7 +689,7 @@ namespace Ripify
                 toast.ShowAt(new Point(x, y));
                 toast.Refresh();
                 cts.Cancel();
-                
+
                 progressLbl.Text = "Cancelling... please wait.";
                 cancelDownloads.Enabled = false;
             }
@@ -667,6 +745,11 @@ namespace Ripify
                 ExceptionHandler.LogMessage($"Could not open log file: {ex.Message}");
                 MessageBox.Show($"Could not open log file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void playListURL_TextChanged(object sender, EventArgs e)
+        {
+
         }
     }
 }

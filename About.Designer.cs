@@ -47,7 +47,7 @@
             groupBox1.ForeColor = Color.FromArgb(255, 128, 0);
             groupBox1.Location = new Point(12, 12);
             groupBox1.Name = "groupBox1";
-            groupBox1.Size = new Size(545, 307);
+            groupBox1.Size = new Size(545, 354);
             groupBox1.TabIndex = 8;
             groupBox1.TabStop = false;
             groupBox1.Text = "About Ripify!";
@@ -57,7 +57,7 @@
             linkLabel3.AutoSize = true;
             linkLabel3.ForeColor = Color.FromArgb(255, 128, 0);
             linkLabel3.LinkColor = Color.FromArgb(255, 128, 0);
-            linkLabel3.Location = new Point(9, 116);
+            linkLabel3.Location = new Point(9, 152);
             linkLabel3.Name = "linkLabel3";
             linkLabel3.Size = new Size(198, 17);
             linkLabel3.TabIndex = 3;
@@ -70,7 +70,7 @@
             linkLabel2.AutoSize = true;
             linkLabel2.ForeColor = Color.FromArgb(255, 128, 0);
             linkLabel2.LinkColor = Color.FromArgb(255, 128, 0);
-            linkLabel2.Location = new Point(9, 168);
+            linkLabel2.Location = new Point(9, 204);
             linkLabel2.Name = "linkLabel2";
             linkLabel2.Size = new Size(211, 17);
             linkLabel2.TabIndex = 2;
@@ -83,7 +83,7 @@
             linkLabel1.AutoSize = true;
             linkLabel1.ForeColor = Color.FromArgb(255, 128, 0);
             linkLabel1.LinkColor = Color.FromArgb(255, 128, 0);
-            linkLabel1.Location = new Point(9, 236);
+            linkLabel1.Location = new Point(9, 272);
             linkLabel1.Name = "linkLabel1";
             linkLabel1.Size = new Size(258, 17);
             linkLabel1.TabIndex = 1;
@@ -97,7 +97,7 @@
             label1.ForeColor = Color.White;
             label1.Location = new Point(9, 29);
             label1.Name = "label1";
-            label1.Size = new Size(527, 255);
+            label1.Size = new Size(522, 289);
             label1.TabIndex = 0;
             label1.Text = resources.GetString("label1.Text");
             // 
@@ -106,7 +106,7 @@
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.Black;
-            ClientSize = new Size(569, 331);
+            ClientSize = new Size(569, 378);
             Controls.Add(groupBox1);
             ForeColor = Color.FromArgb(192, 0, 0);
             FormBorderStyle = FormBorderStyle.Fixed3D;

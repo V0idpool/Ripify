@@ -118,8 +118,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="label1.Text" xml:space="preserve">
-    <value>Ripify is a lightweight app designed to help you download audio 
-from Spotify playlists and albums by searching and extracting tracks from YouTube.
+    <value>Ripify is a lightweight app designed to help you download audio from Spotify 
+playlists and albums by searching and extracting tracks from YouTube, and
+additionally supports downloading single youtube tracks via its url (YT Playlists
+planned soon).
 
 To use Ripify, you’ll need a Spotify Developer Client ID and Client Secret, 
 these allow the app to access your Spotify playlists securely.

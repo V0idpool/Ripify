@@ -160,7 +160,7 @@
             // 
             settingsToolStripMenuItem.BackColor = SystemColors.Control;
             settingsToolStripMenuItem.Name = "settingsToolStripMenuItem";
-            settingsToolStripMenuItem.Size = new Size(180, 22);
+            settingsToolStripMenuItem.Size = new Size(125, 22);
             settingsToolStripMenuItem.Text = "Settings...";
             settingsToolStripMenuItem.Click += settingsToolStripMenuItem_Click;
             // 
@@ -168,7 +168,7 @@
             // 
             logFileToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { openLogFileToolStripMenuItem, openLogFileFolderToolStripMenuItem });
             logFileToolStripMenuItem.Name = "logFileToolStripMenuItem";
-            logFileToolStripMenuItem.Size = new Size(180, 22);
+            logFileToolStripMenuItem.Size = new Size(125, 22);
             logFileToolStripMenuItem.Text = "Log File...";
             // 
             // openLogFileToolStripMenuItem
@@ -297,7 +297,6 @@
         private ToolStripMenuItem aboutToolStripMenuItem;
         private Label currentTaskLabel;
         private Label etaMbLbl;
-        private TextBox textBox1;
         private Button button1;
         private Button cancelDownloads;
         private ToolStripMenuItem toolStripMenuItem1;
