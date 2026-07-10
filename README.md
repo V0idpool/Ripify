@@ -14,7 +14,8 @@
 
 ## 🎵 What Ripify Does
 
-- **Pulls tracks from Spotify**: Just drop in a public playlist or album, and Ripify will grab the track info.
+- **Pulls tracks from Spotify**: Just drop in a public playlist , album, or track, and Ripify will grab the track info.
+- **Supports Youtube tracks & playlists**: Drop in a Youtube track, or playlist, and Ripify will grab the track info.
 - **Finds audio on YouTube**: It searches YouTube for each track and uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) to download high-quality MP3s.
 - **Batch downloading**: Grab multiple songs in one go, complete with progress updates and a max concurrent download of 3 (Can be increased).
 - **Pick your folder**: You can choose where your music gets saved.
@@ -36,7 +37,6 @@ Ensure you download **FFmpeg Full Build (The latest version)** from https://www.
 ### 3. First Time Running It  
 When you launch Ripify for the first time:
 - It’ll create a `UserCFG.ini` file if one doesn’t exist.
-- You’ll be asked to enter your Spotify `ClientID` and `ClientSecret`.
 - You will need to put a copy of your cookies file containing your logged in youtube account, this is to bypass age restriction or private content checks.
 - Use this in chrome browser with youtube.com open, and export the cookies to a text file: https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc
 - Name the text file cookies.txt and place it in the same directory as Ripify.
@@ -47,7 +47,7 @@ When you launch Ripify for the first time:
 
 ### 🎧 Load a Spotify Playlist or Album
 
-1. Copy the link to a Spotify playlist or album.
+1. Copy the link to a Spotify or Youtube playlist, album, or track.
 2. Paste it into the app’s input field.
 3. Click **Fetch**. Ripify will pull all track names and prep YouTube search queries for each.
 
@@ -65,5 +65,5 @@ Your settings are saved in this file in the app's folder. Here’s what it looks
 
 ```ini
 [Settings]
-ClientID=your_spotify_client_id
-ClientSecret=your_spotify_client_secret
+DownloadPath=path to the folder you'd like songs to download to.
+MaxDownloads=# of concurrent downloads at once.
