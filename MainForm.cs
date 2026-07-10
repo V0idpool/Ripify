@@ -718,13 +718,11 @@ namespace Ripify
                               
                                 bool success = await DownloadAudioFromYoutube(query, saveFolder, token, i + 1, totalCount);
 
-                                // Logic updated to match the 'else' block
                                 lock (failedDownloads)
                                 {
                                     completedCount++;
                                     Invoke(() =>
                                     {
-                                        // Use the shared variables so progress moves correctly
                                         progressBar1.Maximum = totalCount;
                                         progressBar1.Value = completedCount;
                                         etaMbLbl.Text = $"{(int)((completedCount / (double)totalCount) * 100)}%";
@@ -814,8 +812,6 @@ namespace Ripify
                     downloadSelected.Enabled = true;
                     cancelDownloads.Enabled = false;
                 });
-                //Invoke(() => etaMbLbl.Text = " ");
-                //Invoke(() => progressBar1.Value = 0);
 
                 if (failedDownloads.Count > 0 && !token.IsCancellationRequested)
                 {
@@ -893,20 +889,17 @@ namespace Ripify
         {
             try
             {
-                // Assuming GetLogFilePath() ensures the directory is created as you defined previously.
                 string logFilePath = ExceptionHandler.GetLogFilePath();
 
-                // Check if the log file exists (it may not if no errors have occurred yet)
                 if (System.IO.File.Exists(logFilePath))
                 {
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(logFilePath)
                     {
-                        UseShellExecute = true // Crucial for opening non-executable files like .txt
+                        UseShellExecute = true
                     });
                 }
                 else
                 {
-                    // Optionally, open the containing folder instead if the file is missing
                     string logDirectory = System.IO.Path.GetDirectoryName(logFilePath);
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(logDirectory)
                     {
@@ -926,7 +919,7 @@ namespace Ripify
             try
             {
                 string logFilePath = ExceptionHandler.GetLogFilePath();
-                // Optionally, open the containing folder instead if the file is missing
+
                 string logDirectory = System.IO.Path.GetDirectoryName(logFilePath);
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(logDirectory)
                 {
