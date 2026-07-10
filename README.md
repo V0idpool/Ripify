@@ -1,5 +1,5 @@
 # Ripify  
-![Ripify](https://img.shields.io/badge/version-1.4-darkred) ![Release](https://img.shields.io/badge/Release-06%2F11%2F2025-blue)
+![Ripify](https://img.shields.io/badge/version-1.6-darkred) ![Release](https://img.shields.io/badge/Release-06%2F11%2F2025-blue)
 
 <p align="center">
   <img src="https://github.com/V0idpool/Ripify/blob/main/iconripify.png" alt="Ripify Logo" width="300" height="300">
