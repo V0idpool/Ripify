@@ -1,4 +1,3 @@
-﻿using SpotifyAPI.Web;
 using System.Diagnostics;
 using YoutubeExplode;
 using System.Linq;
@@ -7,11 +6,11 @@ using static System.Net.Mime.MediaTypeNames;
 using Application = System.Windows.Forms.Application;
 using System.Text;
 using AngleSharp.Text;
+using System.Text.Json;
 namespace Ripify
 {
     public partial class MainForm : Form
     {
-        private SpotifyClient spotify;
         private List<string> trackQueries = new();
         private List<string> failedTrackQueries = new();
         private CancellationTokenSource cts;
@@ -103,17 +102,7 @@ namespace Ripify
                 }
             }
         }
-        private async Task InitializeSpotifyClient()
-        {
-            if (spotify != null) return;
-
-            var config = SpotifyClientConfig.CreateDefault();
-
-            var request = new ClientCredentialsRequest(clientID, clientSecret);
-            var response = await new OAuthClient(config).RequestToken(request);
-
-            spotify = new SpotifyClient(config.WithToken(response.AccessToken));
-        }
+       
         private (string Type, string Id) ExtractPlaylistId(string url)
         {
             try
@@ -261,150 +250,355 @@ namespace Ripify
             var selectedItems = trackList.SelectedItems.Cast<string>().ToList();
             var youtube = new YoutubeClient();
             int currentCount = 0;
-            // --- ADD THIS BLOCK FOR YOUTUBE LINKS ---
-           
-
             var progressForm = new ProgressForm();
+
             progressForm.Show();
+
             if (inputUrl.Contains("youtube.com") || inputUrl.Contains("youtu.be"))
             {
                 Stopwatch swYT = Stopwatch.StartNew();
-                var videoInfo = await youtube.Videos.GetAsync(inputUrl);
-                trackQueries.Add(videoInfo.Title);
-                trackList.Items.Add(videoInfo.Title);
-                currentCount++;
+                this.recentLinkManager.AddLink(inputUrl);
 
-                UpdateFetchStatus(progressForm, currentCount, 1, swYT.Elapsed);
+                try
+                {
+                    if (inputUrl.Contains("watch?v=") || inputUrl.Contains("youtu.be/"))
+                    {
+                        var videoInfo = await youtube.Videos.GetAsync(inputUrl);
+                        trackQueries.Add(videoInfo.Title);
+                        trackList.Items.Add(videoInfo.Title);
+                        currentCount++;
 
-                await Task.Delay(1000); // Let the user see 100%
+                        UpdateFetchStatus(progressForm, currentCount, 1, swYT.Elapsed);
+                    }
+                    else if (inputUrl.Contains("list="))
+                    {
+                        Invoke(() => progressLbl.Text = "Fetching YouTube Playlist...");
+
+                        await foreach (var video in youtube.Playlists.GetVideosAsync(inputUrl))
+                        {
+                            trackQueries.Add(video.Title);
+                            trackList.Items.Add(video.Title);
+                            currentCount++;
+
+                            UpdateFetchStatus(progressForm, currentCount, currentCount + 1, swYT.Elapsed);
+                        }
+                    }
+                    else
+                    {
+                        MessageBox.Show("Could not identify a valid video or playlist ID in the YouTube URL.");
+                        progressForm.Close();
+                        fetchBTN.Enabled = true;
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Error fetching YouTube link: " + ex.Message);
+                }
+
+                await Task.Delay(1000);
                 progressForm.Close();
                 fetchBTN.Enabled = true;
-                return; // Exit early, do not run Spotify logic
+                return;
             }
             try
             {
-                this.recentLinkManager.AddLink(playListURL.Text);
-                var (type, id) = ExtractPlaylistId(playListURL.Text);
+                this.recentLinkManager.AddLink(inputUrl);
+                var (type, id) = ExtractPlaylistId(inputUrl);
+
                 if (string.IsNullOrEmpty(type) || string.IsNullOrEmpty(id))
                 {
-                    MessageBox.Show("Invalid Spotify playlist or album URL.");
+                    MessageBox.Show("Invalid Spotify playlist, album, or track URL.");
+                    progressForm.Close();
                     return;
                 }
 
-                await InitializeSpotifyClient();
                 Stopwatch sw = Stopwatch.StartNew();
 
-                if (type == "playlist")
-                {
-                    var firstPage = await spotify.Playlists.GetItems(id);
-                    int totalTracks = firstPage.Total ?? 0;
+                await ProcessSpotifyPlaylist(inputUrl, progressForm, sw);
 
-                    var items = spotify.Paginate(firstPage);
-                    
-
-                    await foreach (var item in items)
-                    {
-                        if (item.Track is FullTrack track)
-                        {
-                            string queryPlaylist = $"{track.Artists[0].Name} - {track.Name}";
-                            trackQueries.Add(queryPlaylist);
-                            trackList.Items.Add(queryPlaylist);
-                            currentCount++;
-
-                            UpdateFetchStatus(progressForm, currentCount, totalTracks, sw.Elapsed);
-                        }
-                    }
-
-                    var toast = new ToastForm($"Fetched {trackQueries.Count} tracks from playlist.");
-                    int screenWidth = Screen.PrimaryScreen.WorkingArea.Width;
-                    int screenHeight = Screen.PrimaryScreen.WorkingArea.Height;
-
-                    int x = (screenWidth - toast.Width) / 2;
-                    int y = (screenHeight - toast.Height) / 2;
-                    toast.ShowAt(new Point(x, y));
-                    toast.Refresh();
-                }
-                else if (type == "album")
-                {
-                    var album = await spotify.Albums.Get(id);
-                    int totalTracks = album.Tracks.Total ?? 0;
-                    currentCount = 0;
-
-                    int offset = 0;
-                    const int limit = 50;
-                    bool moreItems = true;
-
-                    while (moreItems)
-                    {
-                        var page = await spotify.Albums.GetTracks(id, new AlbumTracksRequest { Limit = limit, Offset = offset });
-
-                        foreach (var track in page.Items)
-                        {
-                            string queryAlbum = $"{track.Artists[0].Name} - {track.Name}";
-                            trackQueries.Add(queryAlbum);
-                            trackList.Items.Add(queryAlbum);
-                            currentCount++;
-
-                            UpdateFetchStatus(progressForm, currentCount, totalTracks, sw.Elapsed);
-                        }
-
-                        offset += limit;
-                        moreItems = page.Next != null;
-                    }
-
-                    var toast = new ToastForm($"Fetched {trackQueries.Count} tracks from album.");
-                    int screenWidth = Screen.PrimaryScreen.WorkingArea.Width;
-                    int screenHeight = Screen.PrimaryScreen.WorkingArea.Height;
-
-                    int x = (screenWidth - toast.Width) / 2;
-                    int y = (screenHeight - toast.Height) / 2;
-                    toast.ShowAt(new Point(x, y));
-                    toast.Refresh();
-                }
-                else if (type == "track")
-                {
-                    // Fetch single track details
-                    var track = await spotify.Tracks.Get(id);
-                    int totalTracks = 1;
-                    currentCount = 0;
-
-                    string queryTrack = $"{track.Artists[0].Name} - {track.Name}";
-                    trackQueries.Add(queryTrack);
-                    trackList.Items.Add(queryTrack);
-                    currentCount++;
-
-                    // Update status for the single item
-                    UpdateFetchStatus(progressForm, currentCount, totalTracks, sw.Elapsed);
-
-                    var toast = new ToastForm($"Fetched single track: {track.Name}");
-                    int screenWidth = Screen.PrimaryScreen.WorkingArea.Width;
-                    int screenHeight = Screen.PrimaryScreen.WorkingArea.Height;
-                    int x = (screenWidth - toast.Width) / 2;
-                    int y = (screenHeight - toast.Height) / 2;
-                    toast.ShowAt(new Point(x, y));
-                    toast.Refresh();
-                }
-                else
-                {
-                    MessageBox.Show("Only playlist, album and song URLs are supported.");
-                }
+                var toast = new ToastForm($"Fetched {trackQueries.Count} tracks successfully.");
+                int screenWidth = Screen.PrimaryScreen.WorkingArea.Width;
+                int screenHeight = Screen.PrimaryScreen.WorkingArea.Height;
+                int x = (screenWidth - toast.Width) / 2;
+                int y = (screenHeight - toast.Height) / 2;
+                toast.ShowAt(new Point(x, y));
+                toast.Refresh();
 
                 progressForm.UpdateProgress(100);
                 await Task.Delay(2000);
-                progressForm.Close();
-                progressForm.Dispose();
-                progressForm = null;
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error fetching playlist: " + ex.Message);
+                MessageBox.Show("Error fetching metadata: " + ex.Message);
             }
             finally
             {
+                progressForm?.Close();
+                progressForm?.Dispose();
                 fetchBTN.Enabled = true;
             }
         }
+        private async Task ProcessSpotifyPlaylist(string url, ProgressForm form, Stopwatch sw)
+        {
+            string ytDlpPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "yt-dlp.exe");
 
+            if (!File.Exists(ytDlpPath))
+                throw new FileNotFoundException("yt-dlp.exe is missing from the application folder.");
+
+            Invoke(() => progressLbl.Text = "Fetching tracks...");
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = ytDlpPath,
+                Arguments = $"--flat-playlist --dump-json --no-warnings --playlist-items :  \"{url}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            using var process = new Process { StartInfo = psi };
+            process.Start();
+            var (type, id) = ExtractPlaylistId(url);
+            int currentCount = 0;
+            if (type == "track")
+            {
+                Invoke(() => progressLbl.Text = "Executing Scraper for single track...");
+                currentCount = await SpotifyScraper(type, id, form, sw);
+
+                if (currentCount == 0)
+                    throw new Exception("Failed to scrape single track details.");
+
+                UpdateFetchStatus(form, currentCount, currentCount, sw.Elapsed);
+                return;
+            }
+            while (!process.StandardOutput.EndOfStream)
+            {
+                string line = await process.StandardOutput.ReadLineAsync();
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                try
+                {
+                    using JsonDocument doc = JsonDocument.Parse(line);
+                    JsonElement root = doc.RootElement;
+
+                    string title = root.TryGetProperty("title", out var tProp) ? tProp.GetString() : "";
+                    string uploader = root.TryGetProperty("uploader", out var uProp) ? uProp.GetString() : "";
+
+                    if (!string.IsNullOrEmpty(title))
+                    {
+                        string formattedQuery = !string.IsNullOrEmpty(uploader) ? $"{uploader} - {title}" : title;
+
+                        trackQueries.Add(formattedQuery);
+                        Invoke(() => trackList.Items.Add(formattedQuery));
+                        currentCount++;
+                        Invoke(() => progressLbl.Text = $"Fetched {currentCount} tracks...");
+                        Invoke(() => currentTaskLabel.Text = $"{currentCount} tracks");
+                        UpdateFetchStatus(form, currentCount, currentCount + 1, sw.Elapsed);
+                    }
+                }
+                catch { /*Ignore unparseable lines */ }
+            }
+
+            await process.WaitForExitAsync();
+
+            if (currentCount == 0)
+            {
+                Invoke(() => progressLbl.Text = "Executing Scraper...");
+
+                if (!string.IsNullOrEmpty(type) && !string.IsNullOrEmpty(id))
+                {
+                    currentCount = await SpotifyScraper(type, id, form, sw);
+                }
+
+                if (currentCount == 0)
+                {
+                    throw new Exception("Both yt-dlp and the fallback failed. Spotify likely updated their UI. Download the latest release of yt-dlp.exe from GitHub and replace the file in your folder.");
+                }
+            }
+
+            UpdateFetchStatus(form, currentCount, currentCount, sw.Elapsed);
+        }
+        private async Task<int> SpotifyScraper(string type, string id, ProgressForm form, Stopwatch sw)
+        {
+            int count = 0;
+            Invoke(() => progressLbl.Text = "Initializing browser...");
+
+            var webView = new Microsoft.Web.WebView2.WinForms.WebView2();
+
+            webView.Size = new System.Drawing.Size(1920, 1080);
+            webView.Location = new System.Drawing.Point(-3000, -3000);
+            this.Controls.Add(webView);
+
+            try
+            {
+                await webView.EnsureCoreWebView2Async(null);
+
+                string url = "https://open.spotify.com/" + type + "/" + id;
+
+                var tcs = new TaskCompletionSource<bool>();
+                EventHandler<Microsoft.Web.WebView2.Core.CoreWebView2NavigationCompletedEventArgs> navHandler = null;
+                navHandler = (sender, args) =>
+                {
+                    webView.CoreWebView2.NavigationCompleted -= navHandler;
+                    tcs.SetResult(true);
+                };
+                webView.CoreWebView2.NavigationCompleted += navHandler;
+
+                Invoke(() => progressLbl.Text = "Loading playlist page...");
+                webView.CoreWebView2.Navigate(url);
+                await tcs.Task;
+
+                await Task.Delay(4000);
+
+                var dataTcs = new TaskCompletionSource<string>();
+                EventHandler<Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs> msgHandler = null;
+                msgHandler = (sender, args) =>
+                {
+                    webView.CoreWebView2.WebMessageReceived -= msgHandler;
+                    dataTcs.TrySetResult(args.TryGetWebMessageAsString());
+                };
+                webView.CoreWebView2.WebMessageReceived += msgHandler;
+
+                Invoke(() => progressLbl.Text = "Scraping tracks...");
+
+                string js = @"
+            (async function() {
+                try {
+                    var tracks = new Set();
+                    var consecutiveNoScroll = 0;
+                    var lastScrollTop = -1;
+
+                    var banners = document.querySelectorAll('#onetrust-banner-sdk, .NavBarFooter');
+                    banners.forEach(function(b) { b.remove(); });
+
+                    var scrollNode = document.querySelector('.main-view-container__scroll-node [data-overlayscrollbars-viewport]');
+
+                    if (!scrollNode) {
+                        window.chrome.webview.postMessage(JSON.stringify({ type: 'done', success: false, error: 'Could not find the main playlist scroll container.' }));
+                        return;
+                    }
+
+                    scrollNode.scrollTop = 0;
+                    await new Promise(r => setTimeout(r, 1000));
+
+                    while (consecutiveNoScroll < 10) {
+                        var rows = document.querySelectorAll('div[data-testid=""tracklist-row""]');
+                        
+                        if (rows.length > 0) {
+                            rows.forEach(function(row) {
+                                var titleEl = row.querySelector('a[data-testid=""internal-track-link""]');
+                                var artistEls = row.querySelectorAll('a[href^=""/artist/""]');
+
+                                if (titleEl) {
+                                    var title = titleEl.textContent ? titleEl.textContent.trim() : '';
+                                    var artist = 'Unknown';
+                                    
+                                    if (artistEls.length > 0) {
+                                        var artists = [];
+                                        artistEls.forEach(function(a) { artists.push(a.textContent.trim()); });
+                                        artist = artists.join(', ');
+                                    }
+                                    
+                                    if (title !== '') {
+                                        tracks.add(artist + ' - ' + title);
+                                    }
+                                }
+                            });
+                        }
+
+                        scrollNode.scrollBy({ top: 1500, behavior: 'auto' });
+
+                        await new Promise(r => setTimeout(r, 700));
+
+                        if (Math.abs(scrollNode.scrollTop - lastScrollTop) < 5) {
+                            consecutiveNoScroll++;
+                            
+                            var currentRows = document.querySelectorAll('div[data-testid=""tracklist-row""]');
+                            if (currentRows.length > 0) {
+                                currentRows[currentRows.length - 1].scrollIntoView({ behavior: 'auto', block: 'end' });
+                            }
+                            await new Promise(r => setTimeout(r, 300));
+                        } else {
+                            consecutiveNoScroll = 0;
+                            lastScrollTop = scrollNode.scrollTop;
+                            window.chrome.webview.postMessage(JSON.stringify({ type: 'progress', count: tracks.size }));
+                        }
+                    }
+
+                    window.chrome.webview.postMessage(JSON.stringify({ type: 'done', success: true, data: Array.from(tracks) }));
+                } catch (err) {
+                    window.chrome.webview.postMessage(JSON.stringify({ type: 'done', success: false, error: err.message }));
+                }
+            })();
+        ";
+
+                await webView.CoreWebView2.ExecuteScriptAsync(js);
+
+                string finalResult = null;
+                while (true)
+                {
+                    string msg = await dataTcs.Task;
+                    using JsonDocument doc = JsonDocument.Parse(msg);
+                    string msgType = doc.RootElement.GetProperty("type").GetString();
+
+                    if (msgType == "progress")
+                    {
+                        int currentScraped = doc.RootElement.GetProperty("count").GetInt32();
+                        Invoke(() => progressLbl.Text = $"Scanning playlist... ({currentScraped} tracks found)");
+
+                        UpdateFetchStatus(form, currentScraped, currentScraped + 1, sw.Elapsed);
+
+                        dataTcs = new TaskCompletionSource<string>();
+                        webView.CoreWebView2.WebMessageReceived += msgHandler;
+                    }
+                    else if (msgType == "done")
+                    {
+                        finalResult = msg;
+                        break;
+                    }
+                }
+
+                using JsonDocument finalDoc = JsonDocument.Parse(finalResult);
+                if (finalDoc.RootElement.GetProperty("success").GetBoolean())
+                {
+                    var tracksArray = finalDoc.RootElement.GetProperty("data");
+                    Invoke(() => trackList.BeginUpdate());
+
+                    foreach (JsonElement element in tracksArray.EnumerateArray())
+                    {
+                        string query = element.GetString();
+                        trackQueries.Add(query);
+                        Invoke(() => {
+                            trackList.Items.Add(query);
+                            currentTaskLabel.Text = $"{++count} tracks";
+                        });
+                    }
+                }
+                else
+                {
+                    string err = finalDoc.RootElement.GetProperty("error").GetString();
+                    throw new Exception($"Scraper Error: {err}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Ripify.Helpers.ExceptionHandler.LogMessage($"Critical error: {ex.Message}");
+                throw;
+            }
+            finally
+            {
+                Invoke(() => {
+                    trackList.EndUpdate();
+                    this.Controls.Remove(webView);
+                    webView.Dispose();
+                });
+            }
+
+            Invoke(() => progressLbl.Text = $"Fetched all {count} tracks!");
+            return count;
+        }
         private async void downloadSelected_Click(object sender, EventArgs e)
         {
             List<string> failedDownloads = new();
